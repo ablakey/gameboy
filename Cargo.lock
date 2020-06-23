@@ -3,3 +3,12 @@
 [[package]]
 name = "gameboy"
 version = "0.1.0"
+dependencies = [
+ "pretty-hex",
+]
+
+[[package]]
+name = "pretty-hex"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "be91bcc43e73799dc46a6c194a55e7aae1d86cc867c860fd4a436019af21bd8c"
