@@ -8,3 +8,5 @@ edition = "2018"
 
 [dependencies]
 pretty-hex = "*"
+serde = { version = "*", features = ["derive"] }
+serde_json = "*"

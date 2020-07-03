@@ -1,35 +1,42 @@
-mod gamepak;
+mod cpu;
+mod mmu;
+mod opcode;
+mod register;
 
-use gamepak::GamePak;
-use std::env;
+use cpu::CPU;
+use mmu::MMU;
 
 fn main() {
-    let args: Vec<String> = env::args().collect();
+    // TODO: handle ROM when the bootloader is working.
+    // let args: Vec<String> = env::args().collect();
+    //
+    // if args.len() < 2 {
+    //     println!("USAGE: {} <rom-file>", args[0]);
+    //     return;
+    // }
 
-    if args.len() < 2 {
-        println!("USAGE: {} <rom-file>", args[0]);
-        return;
+    // let romfile = &args[1];
+
+    let mut emulator = Emulator::new();
+
+    loop {
+        emulator.step();
     }
-
-    let filename = &args[1];
-
-    let emulator = Emulator::new(filename);
-
-    emulator.gamepak.print_debug();
 }
 
 struct Emulator {
     // APU
     // PPU  <- Screen
-    // CPU
-    // Memory <- GamePak
-    gamepak: GamePak, // Input
+    cpu: CPU,
 }
 
 impl Emulator {
-    fn new(path: &String) -> Self {
-        Self {
-            gamepak: GamePak::load_from_rom(path).unwrap(),
-        }
+    /// Create a new Emulator instance. The only
+    fn new() -> Self {
+        Self { cpu: CPU::new() }
+    }
+
+    fn step(&mut self) {
+        self.cpu.step();
     }
 }
