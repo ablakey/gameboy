@@ -1,3 +1,18 @@
+/// Generate getters and setters for register pairs. 8-bit registers can be combined into pairs to
+/// act as 16-bit registers. There are four to be created: AF, BC, DE, HL.
+macro_rules! create_word_getsetters {
+    ($getname:ident, $setname:ident, $reg_1:ident, $reg_2:ident) => {
+        fn $getname(&self) -> u16 {
+            ((self.$reg_1 as u16) << 8) | (self.$reg_2 as u16)
+        }
+
+        fn $setname(&mut self, value: u16) {
+            self.$reg_1 = (value >> 8) as u8;
+            self.$reg_2 = value as u8;
+        }
+    };
+}
+
 pub struct Register {
     pub a: u8,
     pub b: u8,
@@ -23,21 +38,40 @@ impl Register {
         }
     }
 
-    /// Get `16-bit register pair AF.
-    pub fn af(&self) -> u16 {
-        ((self.a as u16) << 8) | (self.f as u16)
-    }
+    create_word_getsetters!(af, set_af, a, f);
+    create_word_getsetters!(bc, set_bc, b, c);
+    create_word_getsetters!(de, set_de, d, e);
+    create_word_getsetters!(hl, set_hl, h, l);
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    #[test]
-    fn test_af() {
-        let mut reg = Register::new();
-        reg.a = 0xFF;
-        reg.f = 0x11;
-        assert_eq!(reg.af(), 0xFF11)
+    macro_rules! test_word_registers {
+        ($getname:ident, $setname:ident, $reg1:ident, $reg2:ident) => {
+            #[test]
+            /// Test getter.
+            fn $getname() {
+                let mut reg = Register::new();
+                reg.$reg1 = 0xFF;
+                reg.$reg2 = 0x11;
+                assert_eq!(reg.$getname(), 0xFF11)
+            }
+
+            #[test]
+            /// Test setter.
+            fn $setname() {
+                let mut reg = Register::new();
+                reg.$setname(0xFF11);
+                assert_eq!(reg.$reg1, 0xFF);
+                assert_eq!(reg.$reg2, 0x11);
+            }
+        };
     }
+
+    test_word_registers!(af, set_af, a, f);
+    test_word_registers!(bc, set_bc, b, c);
+    test_word_registers!(de, set_de, d, e);
+    test_word_registers!(hl, set_hl, h, l);
 }
