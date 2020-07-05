@@ -18,6 +18,9 @@ pub struct Flags {
 #[derive(Deserialize, Debug)]
 pub struct Operand {
     name: String,
+    decrement: Option<bool>,
+    increment: Option<bool>,
+    immediate: bool,
 }
 
 #[derive(Deserialize, Debug)]
@@ -44,7 +47,14 @@ impl OpCodes {
         Ok(u)
     }
 
-    /// Get a string representation of an opcode. Great for debugging
+    /// Get a string representation of an opcode. Great for debugging.const
+    /// Examples:
+    /// ```
+    /// 0x31 LD   SP    d16    3 12    [- - - -]
+    /// 0xAF XOR  A            1 4     [Z 0 0 0]
+    /// 0x21 LD   HL    d16    3 12    [- - - -]
+    /// 0x32 LD   (HL-) A      1 8     [- - - -]
+    /// ```
     pub fn get_opcode_repr(&self, opcode: u8, is_cbprefix: bool) -> String {
         let opcode_map = if is_cbprefix {
             &self.cbprefixed
@@ -59,12 +69,32 @@ impl OpCodes {
             .get(&opcode_string)
             .expect(format!("Could not find opcode: {}", opcode_string).as_str());
 
-        let operand_strings = opcode
+        /// Format an operand string given its parameters. For example: (HL-) is the HL register
+        /// autodecrementing, with indirection.
+        fn format_operand(operand: &Operand) -> String {
+            let mut operand_str = String::from(&operand.name);
+
+            if let Some(true) = operand.decrement {
+                operand_str.push('-');
+            }
+
+            if let Some(false) = operand.increment {
+                operand_str.push('+');
+            }
+
+            if !operand.immediate {
+                operand_str = format! {"({})", operand_str};
+            }
+
+            format!("{:6}", operand_str)
+        }
+
+        let operand_strings: String = opcode
             .operands
             .iter()
-            .map(|o| o.name.as_str())
-            .collect::<Vec<&str>>()
-            .join(", ");
+            .map(format_operand)
+            .collect::<Vec<String>>()
+            .join("");
 
         let cycles = opcode
             .cycles
@@ -74,7 +104,7 @@ impl OpCodes {
             .join("/");
 
         format!(
-            "{} {} {} [{} {}] [{} {} {} {}]",
+            "{:4} {:4} {:12} {} {:5} [{} {} {} {}]",
             opcode_string,
             opcode.mnemonic,
             operand_strings,

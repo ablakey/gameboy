@@ -36,15 +36,16 @@ impl MMU {
     }
 
     /// Read a byte from address.
-    pub fn rb(&self, address: u16) -> u8 {
+    pub fn read_byte(&self, address: u16) -> u8 {
         self.memory[address as usize]
     }
 
     /// Read a word from address.
-    pub fn rw(&self, address: u16) -> u16 {
-        let low = self.memory[(address + 1) as usize] as u16;
-        let high = self.memory[address as usize] as u16;
-        (high << 8) | low
+    /// DMG-01 is little endian so the least-significant byte is read first.
+    pub fn read_word(&self, address: u16) -> u16 {
+        let lsb = self.read_byte(address) as u16;
+        let msb = self.read_byte(address + 1) as u16;
+        (msb << 8) | lsb
     }
 
     /// Load the boot loader ROM from file.
@@ -55,5 +56,19 @@ impl MMU {
         let mut buffer = [0; 0x100];
         f.read(&mut buffer[..])?;
         Ok(buffer)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_read_word() {
+        let mmu = MMU::new();
+        mmu.memory[0] = 0xFF;
+        mmu.memory[1] = 0x11;
+        let word = mmu.read_word(0x00);
+        assert_eq!(word, 0x11FF);
     }
 }
