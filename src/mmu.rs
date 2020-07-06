@@ -48,6 +48,10 @@ impl MMU {
         (msb << 8) | lsb
     }
 
+    pub fn write(&mut self, address: u16, value: u8) {
+        self.memory[address as usize] = value;
+    }
+
     /// Load the boot loader ROM from file.
     /// This is a 256byte ROM referencable at 0x00 - 0xFF, containing the logic for validating
     /// that the cartridge is legitimate, scolling the Nintendo logo and playing the chime.
@@ -64,8 +68,8 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_read_word() {
-        let mmu = MMU::new();
+    fn it_reads_a_word() {
+        let mut mmu = MMU::new();
         mmu.memory[0] = 0xFF;
         mmu.memory[1] = 0x11;
         let word = mmu.read_word(0x00);
