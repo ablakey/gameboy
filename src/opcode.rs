@@ -55,19 +55,8 @@ impl OpCodes {
     /// 0x21 LD   HL    d16    3 12    [- - - -]
     /// 0x32 LD   (HL-) A      1 8     [- - - -]
     /// ```
-    pub fn get_opcode_repr(&self, opcode: u8, is_cbprefix: bool) -> String {
-        let opcode_map = if is_cbprefix {
-            &self.cbprefixed
-        } else {
-            &self.unprefixed
-        };
-
-        // Convert the hex opcode into a string representation as the map is keyed by strings.
-        let opcode_string = format!("{:#04X}", opcode);
-
-        let opcode = opcode_map
-            .get(&opcode_string)
-            .expect(format!("Could not find opcode: {}", opcode_string).as_str());
+    pub fn get_opcode_repr(&self, opcode_number: u8, is_cbprefix: bool) -> String {
+        let opcode = self.get_opcode(opcode_number, is_cbprefix);
 
         /// Format an operand string given its parameters. For example: (HL-) is the HL register
         /// autodecrementing, with indirection.
@@ -104,8 +93,8 @@ impl OpCodes {
             .join("/");
 
         format!(
-            "{:4} {:4} {:12} {} {:5} [{} {} {} {}]",
-            opcode_string,
+            "{:#04X} {:4} {:12} {} {:5} [{} {} {} {}]",
+            opcode_number,
             opcode.mnemonic,
             operand_strings,
             opcode.bytes,
@@ -115,5 +104,51 @@ impl OpCodes {
             opcode.flags.H,
             opcode.flags.C,
         )
+    }
+
+    /// Return the number of m-cycles (not t-states).
+    /// The JSON stores t-states so we divide by four.
+    /// See: https://gbdev.io/gb-opcodes/optables/ for details explaining m-cycles and t-states.
+    /// action_taken is true if a conditional operation was undertaken that takes more CPU time to
+    /// perform. There is always one cycle count, sometimes two.
+    pub fn get_cycles(&self, opcode_number: u8, is_cbprefix: bool, action_taken: bool) -> u8 {
+        let opcode = self.get_opcode(opcode_number, is_cbprefix);
+
+        if action_taken {
+            opcode.cycles[1] / 4
+        } else {
+            opcode.cycles[0] / 4
+        }
+    }
+
+    /// Look up an opcode and return it.
+    /// Panics if opcode was not found. This should never happen unless there's a bug in the
+    /// emulator.
+    fn get_opcode(&self, opcode_number: u8, is_cbprefix: bool) -> &OpCode {
+        // Convert the hex opcode into a string representation as the map is keyed by strings.
+        let opcode_string = format!("{:#04X}", opcode_number);
+
+        let opcode_map = if is_cbprefix {
+            &self.cbprefixed
+        } else {
+            &self.unprefixed
+        };
+
+        opcode_map
+            .get(&opcode_string)
+            .expect(format!("Could not find opcode: {}", opcode_string).as_str())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_get_opcode() {
+        let opcodes = OpCodes::from_path("data/opcodes.json").unwrap();
+
+        let cycles = opcodes.get_cycles(0x00, false, false);
+        assert_eq!(cycles, 1);
     }
 }

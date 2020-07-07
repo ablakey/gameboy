@@ -1,6 +1,6 @@
 /// Generate getters and setters for register pairs. 8-bit registers can be combined into pairs to
 /// act as 16-bit registers. There are four to be created: AF, BC, DE, HL.
-macro_rules! create_pair {
+macro_rules! create_register_pair {
     ($getname:ident, $setname:ident, $reg_1:ident, $reg_2:ident) => {
         pub fn $getname(&self) -> u16 {
             ((self.$reg_1 as u16) << 8) | (self.$reg_2 as u16)
@@ -13,29 +13,20 @@ macro_rules! create_pair {
     };
 }
 
-/// Available registers, both single and pairs.
-#[derive(Debug)]
-pub enum Register {
-    A,
-    B,
-    C,
-    D,
-    E,
-    H,
-    L,
-    AF,
-    BC,
-    DE,
-    HL,
-}
+macro_rules! create_flag {
+    ($getter:ident, $setter:ident, $mask:expr) => {
+        pub fn $getter(&self) -> bool {
+            self.f & $mask != 0
+        }
 
-/// CPU flags.
-/// TODO: explain what each one means.
-pub enum Flag {
-    C,
-    N,
-    H,
-    Z,
+        pub fn $setter(&mut self, value: bool) {
+            if value {
+                self.f |= $mask;
+            } else {
+                self.f &= !$mask;
+            }
+        }
+    };
 }
 
 pub struct Registers {
@@ -63,63 +54,64 @@ impl Registers {
         }
     }
 
-    pub fn get(&self, register: Register) -> u8 {
-        match register {
-            Register::A => self.a,
-            Register::B => self.b,
-            Register::C => self.c,
-            Register::D => self.d,
-            Register::E => self.e,
-            Register::H => self.h,
-            Register::L => self.l,
-            _ => panic!("Tried to access a non 8-bit register: {:?}", register),
-        }
-    }
+    create_flag!(flag_z, set_flag_z, 0b10000000);
+    create_flag!(flag_n, set_flag_n, 0b01000000);
+    create_flag!(flag_h, set_flag_h, 0b00100000);
+    create_flag!(flag_c, set_flag_c, 0b00010000);
 
-    pub fn get_pair(&self, register: Register) -> u16 {
-        match register {
-            Register::AF => self.get_af(),
-            Register::BC => self.get_bc(),
-            Register::DE => self.get_de(),
-            Register::HL => self.get_hl(),
-            _ => panic!("Tried to access a non 16-bit register pair: {:?}", register),
-        }
-    }
-
-    create_pair!(get_af, set_af, a, f);
-    create_pair!(get_bc, set_bc, b, c);
-    create_pair!(get_de, set_de, d, e);
-    create_pair!(get_hl, set_hl, h, l);
+    create_register_pair!(af, set_af, a, f);
+    create_register_pair!(bc, set_bc, b, c);
+    create_register_pair!(de, set_de, d, e);
+    create_register_pair!(hl, set_hl, h, l);
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    // Test getters and setters for the word registers. Read above for details on these 16-bit
-    // registers backed by two 8-bit registers.
-    macro_rules! test_pair {
-        ($getname:ident, $setname:ident, $reg1:ident, $reg2:ident) => {
-            #[test]
-            fn $getname() {
-                let mut reg = Registers::new();
-                reg.$reg1 = 0xFF;
-                reg.$reg2 = 0x11;
-                assert_eq!(reg.$getname(), 0xFF11)
-            }
-
-            #[test]
-            fn $setname() {
-                let mut reg = Registers::new();
-                reg.$setname(0xFF11);
-                assert_eq!(reg.$reg1, 0xFF);
-                assert_eq!(reg.$reg2, 0x11);
-            }
-        };
+    /// Test setting the af register. Given each register is implemented using a macro, we only need
+    /// to test one of them.
+    #[test]
+    fn test_af() {
+        let mut reg = Registers::new();
+        reg.a = 0xFF;
+        reg.f = 0x11;
+        assert_eq!(reg.af(), 0xFF11)
     }
 
-    test_pair!(get_af, set_af, a, f);
-    test_pair!(get_bc, set_bc, b, c);
-    test_pair!(get_de, set_de, d, e);
-    test_pair!(get_hl, set_hl, h, l);
+    /// Test getting the af register. Given each register is implemented using a macro, we only need
+    /// to test one of them.
+    #[test]
+    fn test_set_af() {
+        let mut reg = Registers::new();
+        reg.set_af(0xFF11);
+        assert_eq!(reg.a, 0xFF);
+        assert_eq!(reg.f, 0x11);
+    }
+
+    #[test]
+    fn test_get_flags() {
+        let mut reg = Registers::new();
+        reg.f = 0b10100000;
+        assert_eq!(reg.flag_z(), true);
+        assert_eq!(reg.flag_n(), false);
+        assert_eq!(reg.flag_h(), true);
+        assert_eq!(reg.flag_c(), false);
+    }
+
+    #[test]
+    fn test_set_flags() {
+        let mut reg = Registers::new();
+        reg.set_flag_z(true);
+        reg.set_flag_n(true);
+        reg.set_flag_h(true);
+        reg.set_flag_c(true);
+        assert_eq!(reg.f, 0b11110000, "{:b}", reg.f);
+
+        reg.set_flag_z(true);
+        reg.set_flag_n(true);
+        reg.set_flag_h(false);
+        reg.set_flag_c(false);
+        assert_eq!(reg.f, 0b11000000, "{:b}", reg.f);
+    }
 }

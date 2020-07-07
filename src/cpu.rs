@@ -6,7 +6,7 @@ pub struct CPU {
     sp: u16,
     mmu: MMU,
     reg: Registers,
-    opcode_metadata: OpCodes,
+    opcodes: OpCodes,
 }
 
 impl CPU {
@@ -16,12 +16,14 @@ impl CPU {
             sp: 0, // TODO: this is not right.
             mmu: MMU::new(),
             reg: Registers::new(),
-            opcode_metadata: OpCodes::from_path("data/opcodes.json").unwrap(),
+            opcodes: OpCodes::from_path("data/opcodes.json").unwrap(),
         }
     }
 
     /// Perform a single opcode step and return how many cycles that took.
-    pub fn step(&mut self) {
+    /// Return the number of m-cycles required to perform the operation. This will be used for
+    /// regulating how fast the CPU is emulated at.
+    pub fn step(&mut self) -> u8 {
         let mut opcode = self.get_byte();
         let is_cbprefix = opcode == 0xCB;
 
@@ -30,13 +32,27 @@ impl CPU {
             opcode = self.get_byte();
         }
 
-        println!(
-            "{}",
-            self.opcode_metadata.get_opcode_repr(opcode, is_cbprefix)
-        );
+        println!("{}", self.opcodes.get_opcode_repr(opcode, is_cbprefix));
+
+        // The number of m-cycles required for this operation. This may be updated by an operation
+        // if a conditional branch was performed that costs more.
+        let mut cycles = self.opcodes.get_cycles(opcode, is_cbprefix, false);
 
         // Match an opcode and manipulate memory accordingly.
         match opcode {
+            0x0E => self.reg.c = self.get_byte(),
+            0x3E => self.reg.a = self.get_byte(),
+            0x20 => {
+                let r8 = self.get_signed_byte();
+                let z = self.reg.flag_z();
+
+                if !z {
+                    // Add an i8 to a u16 by converting to u16 and wrapping_add. Because the two's
+                    // completement i8 gets re-represented as a u16, a wrapping add will properly
+                    // wrap around and handle negatives properly.
+                    self.pc = self.pc.wrapping_add(r8 as u16);
+                }
+            }
             0x21 => {
                 let b = self.get_word();
                 self.reg.set_hl(b)
@@ -51,16 +67,23 @@ impl CPU {
             0xAF => self.alu_xor(self.reg.a),
             _ => panic!(
                 "Opcode: {} not handled.",
-                self.opcode_metadata.get_opcode_repr(opcode, is_cbprefix)
+                self.opcodes.get_opcode_repr(opcode, is_cbprefix)
             ),
         };
+
+        cycles
     }
 
-    /// Get the next byte in memory and advance the program counter by 1.
+    /// Get the next byte and advance the program counter by 1.
     fn get_byte(&mut self) -> u8 {
         let byte = self.mmu.read_byte(self.pc);
         self.pc += 1;
         byte
+    }
+
+    /// Get the next byte as a two's complement signed integer and advance the program counter by 1.
+    fn get_signed_byte(&mut self) -> i8 {
+        self.get_byte() as i8
     }
 
     /// Get the next word in memory and advance the program counter by 2.
@@ -77,10 +100,14 @@ impl CPU {
     ///
     fn alu_xor(&mut self, n: u8) {
         self.reg.a ^= n;
-        self.reg.set_flag(Flag::Z)
+        self.reg.set_flag_z(self.reg.a == 0);
+        self.reg.set_flag_h(false);
+        self.reg.set_flag_n(false);
+        self.reg.set_flag_c(false);
     }
 }
 
+#[cfg(test)]
 mod tests {
     use super::*;
 
