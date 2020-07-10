@@ -35,41 +35,57 @@ impl CPU {
         println!("{}", self.opcodes.get_opcode_repr(opcode, is_cbprefix));
 
         // The number of m-cycles required for this operation. This may be updated by an operation
-        // if a conditional branch was performed that costs more.
+        // if a conditional branch was NOT performed that costs less. We assume the condition is not
+        // met.
         let mut cycles = self.opcodes.get_cycles(opcode, is_cbprefix, false);
+        let mut condition_met = false;
 
         // Match an opcode and manipulate memory accordingly.
-        match opcode {
-            0x0E => self.reg.c = self.get_byte(),
-            0x3E => self.reg.a = self.get_byte(),
-            0x20 => {
-                let r8 = self.get_signed_byte();
-                let z = self.reg.flag_z();
-
-                if !z {
-                    // Add an i8 to a u16 by converting to u16 and wrapping_add. Because the two's
-                    // completement i8 gets re-represented as a u16, a wrapping add will properly
-                    // wrap around and handle negatives properly.
-                    self.pc = self.pc.wrapping_add(r8 as u16);
+        if !is_cbprefix {
+            match opcode {
+                0x0C => self.reg.c += 1,
+                0x0E => self.reg.c = self.get_byte(),
+                0x3E => self.reg.a = self.get_byte(),
+                0x20 => {
+                    if !self.reg.flag_z() {
+                        self.pc = self.pc.wrapping_add(self.get_signed_byte() as u16);
+                        condition_met = true;
+                    }
                 }
+                0x21 => {
+                    let b = self.get_word();
+                    self.reg.set_hl(b)
+                }
+                0x31 => self.sp = self.get_word(),
+                0x32 => {
+                    self.mmu.write(self.reg.hl(), self.reg.a); // Set (HL) to A.
+                    self.reg.set_hl(self.reg.hl().wrapping_sub(1)); // Decrement.
+                }
+                0x77 => self.mmu.write(self.reg.hl(), self.reg.a),
+                0x7C => self.reg.a = self.reg.h,
+                0x9F => self.reg.alu_sbc(self.reg.a),
+                0xAF => self.reg.alu_xor(self.reg.a),
+                0xE2 => self.mmu.write(0xFF00 + self.reg.c as u16, self.reg.a),
+
+                _ => panic!(
+                    "Opcode: {} not handled.",
+                    self.opcodes.get_opcode_repr(opcode, is_cbprefix)
+                ),
             }
-            0x21 => {
-                let b = self.get_word();
-                self.reg.set_hl(b)
+        } else {
+            match opcode {
+                0x7C => self.reg.alu_bit(self.reg.h, 7),
+                _ => panic!(
+                    "CBPREFIX Opcode: {} not handled.",
+                    self.opcodes.get_opcode_repr(opcode, is_cbprefix)
+                ),
             }
-            0x31 => self.sp = self.get_word(),
-            0x32 => {
-                let addr = self.reg.hl();
-                let value = self.get_byte();
-                self.mmu.write(addr, value);
-            }
-            0x7C => self.reg.a = self.reg.h,
-            0xAF => self.alu_xor(self.reg.a),
-            _ => panic!(
-                "Opcode: {} not handled.",
-                self.opcodes.get_opcode_repr(opcode, is_cbprefix)
-            ),
-        };
+        }
+
+        // Change cycles to be the smaller value (action not taken).
+        if condition_met {
+            cycles = self.opcodes.get_cycles(opcode, is_cbprefix, false);
+        }
 
         cycles
     }
@@ -91,32 +107,5 @@ impl CPU {
         let word = self.mmu.read_word(self.pc);
         self.pc += 2;
         word
-    }
-}
-
-/// Implement the ALU functions that drive math and boolean logic opcodes.
-impl CPU {
-    /// Logical exclusive OR n with register A, result in A.
-    ///
-    fn alu_xor(&mut self, n: u8) {
-        self.reg.a ^= n;
-        self.reg.set_flag_z(self.reg.a == 0);
-        self.reg.set_flag_h(false);
-        self.reg.set_flag_n(false);
-        self.reg.set_flag_c(false);
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn it_xor_reg_a() {
-        let mut cpu = CPU::new();
-        cpu.alu_xor(0xFF); // 0x00 ^ 0xFF
-        assert_eq!(cpu.reg.a, 0xFF);
-        cpu.alu_xor(0x11); // 0xFF ^ 0x11
-        assert_eq!(cpu.reg.a, 0xEE);
     }
 }

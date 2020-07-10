@@ -92,9 +92,15 @@ impl OpCodes {
             .collect::<Vec<String>>()
             .join("/");
 
+        let full_opcode_number = if is_cbprefix {
+            0xCB00 + opcode_number as u16
+        } else {
+            opcode_number as u16
+        };
+
         format!(
-            "{:#04X} {:4} {:12} {} {:5} [{} {} {} {}]",
-            opcode_number,
+            "{:#6X} {:4} {:12} {} {:5} [{} {} {} {}]",
+            full_opcode_number,
             opcode.mnemonic,
             operand_strings,
             opcode.bytes,
@@ -114,10 +120,12 @@ impl OpCodes {
     pub fn get_cycles(&self, opcode_number: u8, is_cbprefix: bool, action_taken: bool) -> u8 {
         let opcode = self.get_opcode(opcode_number, is_cbprefix);
 
+        // We get first and last rather than indexes because we might want the last element
+        // of an opcode that only has one possible cycle cost.
         if action_taken {
-            opcode.cycles[1] / 4
+            opcode.cycles.first().unwrap() / 4
         } else {
-            opcode.cycles[0] / 4
+            opcode.cycles.last().unwrap() / 4
         }
     }
 
