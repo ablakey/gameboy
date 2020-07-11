@@ -57,6 +57,7 @@ impl CPU {
         // Match an opcode and manipulate memory accordingly.
         if !is_cbprefix {
             match opcode {
+                0x05 => self.reg.b = self.reg.alu_dec(self.reg.b),
                 0x06 => self.reg.b = self.get_byte(),
                 0x11 => {
                     let d16 = self.get_word();

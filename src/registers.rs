@@ -79,8 +79,16 @@ impl Registers {
 
         // Calculate a half-carry by isolating the low nibble, adding one, and seeing if the result
         // is larger than 0xF (fourth bit is high).
-        println!("{}", new_value);
         self.set_flag_h(((0xF & value) + 1) > 0xF);
+        self.set_flag_z(new_value == 0);
+        self.set_flag_n(false);
+
+        new_value
+    }
+
+    pub fn alu_dec(&mut self, value: u8) -> u8 {
+        let new_value = value.wrapping_sub(1);
+        self.set_flag_h(((0xF & value) + 1) > 0xF); // See alu_inc about half carry.
         self.set_flag_z(new_value == 0);
         self.set_flag_n(false);
 
@@ -191,13 +199,20 @@ mod tests {
 
     #[test]
     fn test_alu_inc() {
-        // Test zero flag, half-carry, and roll-over.
         let mut reg = Registers::new();
         reg.a = 0xFF;
         reg.a = reg.alu_inc(reg.a);
         assert_eq!(reg.a, 0x0);
-        assert_eq!(reg.flag_z(), true);
-        assert_eq!(reg.flag_h(), true);
+        assert_flags!(reg, true, false, true, false);
+    }
+
+    #[test]
+    fn test_alu_dec() {
+        let mut reg = Registers::new();
+        reg.a = 0xFF;
+        reg.a = reg.alu_dec(reg.a);
+        assert_eq!(reg.a, 0xFE);
+        assert_flags!(reg, false, true, true, false);
     }
 
     #[test]
