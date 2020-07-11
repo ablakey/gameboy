@@ -1,12 +1,14 @@
 mod cpu;
+mod debugger;
 mod input;
 mod mmu;
 mod opcode;
 mod registers;
 mod screen;
-
 use cpu::CPU;
+use debugger::init_debugger;
 use input::{Input, InputEvent};
+use log::info;
 use mmu::MMU;
 use screen::Screen;
 use sdl2;
@@ -14,6 +16,7 @@ use std::thread::sleep;
 use std::time::Duration;
 
 fn main() {
+    init_debugger();
     let emulator = Emulator::new();
 
     match emulator {

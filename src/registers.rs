@@ -115,11 +115,36 @@ impl Registers {
     pub fn alu_sbc(&mut self, value: u8) {
         self.alu_sub(value + self.flag_c() as u8);
     }
+
+    /// Rotate bits left through carry.
+    /// This means that we shift left, and the MSB becomes the LSB. Except "through carry" means
+    /// We act as if the carry is part of that ring: MSB becomes carry, old carry becomes LSB.
+    pub fn alu_rl(&mut self, value: u8) -> u8 {
+        let new_value = value << 1 | self.flag_c() as u8;
+        self.set_flag_z(new_value == 0);
+        self.set_flag_h(false);
+        self.set_flag_n(false);
+        self.set_flag_c((value & 0x80) == 0x80); // If the value's MSB is 1, there's a carry.
+        new_value
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Assert that all flags are certain values.
+    /// We use a macro instead of a function so that test failures provide more useful lines.
+    /// A normal function will just point to a line up here instead of the offending test. We could
+    /// enable a full stack trace but that gets really irritating to wade through while debugging.
+    macro_rules! assert_flags {
+        ($reg:ident, $z:expr, $n:expr, $h:expr, $c:expr) => {
+            assert_eq!($reg.flag_z(), $z, "Flag Z");
+            assert_eq!($reg.flag_n(), $n, "Flag N");
+            assert_eq!($reg.flag_h(), $h, "Flag H");
+            assert_eq!($reg.flag_c(), $c, "Flag C");
+        };
+    }
 
     /// Test setting the af register. Given each register is implemented using a macro, we only need
     /// to test one of them.
@@ -145,10 +170,7 @@ mod tests {
     fn test_get_flags() {
         let mut reg = Registers::new();
         reg.f = 0b10100000;
-        assert_eq!(reg.flag_z(), true);
-        assert_eq!(reg.flag_n(), false);
-        assert_eq!(reg.flag_h(), true);
-        assert_eq!(reg.flag_c(), false);
+        assert_flags!(reg, true, false, true, false);
     }
 
     #[test]
@@ -200,11 +222,11 @@ mod tests {
         let mut reg = Registers::new();
         reg.a = 0b00001000;
         reg.alu_bit(3, reg.a);
-        assert_eq!(reg.flag_z(), false);
+        assert_flags!(reg, false, false, true, false);
 
         reg.a = 0b00000000;
         reg.alu_bit(3, reg.a);
-        assert_eq!(reg.flag_z(), true);
+        assert_flags!(reg, true, false, true, false);
     }
 
     #[test]
@@ -213,10 +235,7 @@ mod tests {
         reg.a = 0x10;
         reg.alu_sub(0xFF);
         assert_eq!(reg.a, 0x11);
-        assert_eq!(reg.flag_z(), false);
-        assert_eq!(reg.flag_n(), true);
-        assert_eq!(reg.flag_h(), true);
-        assert_eq!(reg.flag_c(), true);
+        assert_flags!(reg, false, true, true, true);
     }
 
     #[test]
@@ -225,9 +244,16 @@ mod tests {
         reg.a = 0xFF;
         reg.alu_sub(0xFF);
         assert_eq!(reg.a, 0x00);
-        assert_eq!(reg.flag_z(), true);
-        assert_eq!(reg.flag_n(), true);
-        assert_eq!(reg.flag_h(), false);
-        assert_eq!(reg.flag_c(), false);
+        assert_flags!(reg, true, true, false, false);
+    }
+
+    #[test]
+    fn test_alu_rl() {
+        let mut reg = Registers::new();
+        let result = reg.alu_rl(0b10000001);
+
+        // MSB becomes carry (c=true), LSB is 0 (carry was false). Shift left.
+        assert_eq!(result, 0b00000010);
+        assert_flags!(reg, false, false, false, true);
     }
 }
