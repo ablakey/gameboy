@@ -87,9 +87,10 @@ impl Registers {
         new_value
     }
 
-    /// Test a specific bit of a given byte. If it is unset, set the Z flag high.
-    pub fn alu_bit(&mut self, value: u8, bit_num: u8) {
-        let mask = 1 << bit_num;
+    /// Test a specific bit of a given byte.
+    /// If the provided bit
+    pub fn alu_bit(&mut self, bit_index: u8, value: u8) {
+        let mask = 0b1 << bit_index;
         let is_unset = value & mask == 0;
         self.set_flag_z(is_unset);
         self.set_flag_n(false);
@@ -198,11 +199,11 @@ mod tests {
     fn test_alu_bit() {
         let mut reg = Registers::new();
         reg.a = 0b00001000;
-        reg.alu_bit(reg.a, 3);
+        reg.alu_bit(3, reg.a);
         assert_eq!(reg.flag_z(), false);
 
         reg.a = 0b00000000;
-        reg.alu_bit(reg.a, 3);
+        reg.alu_bit(3, reg.a);
         assert_eq!(reg.flag_z(), true);
     }
 

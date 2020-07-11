@@ -10,10 +10,22 @@ pub struct CPU {
 }
 
 impl CPU {
+    /// Initialise the CPU, its pointers, MMU, and registers.
+    ///
+    /// The Stack:
+    /// The stack pointer begins one above the topmost address allocated to the stack. It decrements
+    /// automatically when used, so first use will push to stack at 0xDFFF. Stack increases
+    /// downwards. http://gameboy.mongenel.com/dmg/asmmemmap.html explains that high ram was
+    /// originally meant for the stack
+    ///
+    /// Program Counter:
+    /// Begins at 0x0 and runs through the bootloader. Once the bootloader is complete, it should
+    /// be at 0x100. Some emulators ignore the bootloader, pre-initialize the emulator, and begin
+    /// at 0x100. We don't take that shortcut, as running the bootloader is a great test.
     pub fn new() -> Self {
         Self {
             pc: 0,
-            sp: 0, // TODO: this is not right.
+            sp: 0xE000, // Stack increases downwards. Start one above the allocated stack space.
             mmu: MMU::new(),
             reg: Registers::new(),
             opcodes: OpCodes::from_path("data/opcodes.json").unwrap(),
@@ -24,6 +36,10 @@ impl CPU {
     /// Return the number of m-cycles required to perform the operation. This will be used for
     /// regulating how fast the CPU is emulated at.
     pub fn step(&mut self) -> u8 {
+        if self.pc == 0x0095 {
+            println!("");
+        }
+
         let mut opcode = self.get_byte();
         let is_cbprefix = opcode == 0xCB;
 
@@ -32,7 +48,13 @@ impl CPU {
             opcode = self.get_byte();
         }
 
-        println!("{}", self.opcodes.get_opcode_repr(opcode, is_cbprefix));
+        // TODO: add some basic logging: https://github.com/drakulix/simplelog.rs
+        // TODO
+        // TODO: don't go overboard with abstraction. Just use warn! and such here.
+        // TODO: use a debugger.rs struct to hide the logger setup.
+        // TODO: but that shouldn't require an interface to use. Just use warn! and other macros.
+        let opcode_details = format!("{}", self.opcodes.get_opcode_repr(opcode, is_cbprefix));
+        self.debugger.log
 
         // The number of m-cycles required for this operation. This may be updated by an operation
         // if a conditional branch was NOT performed that costs less. We assume the condition is not
@@ -43,13 +65,20 @@ impl CPU {
         // Match an opcode and manipulate memory accordingly.
         if !is_cbprefix {
             match opcode {
+                0x11 => {
+                    let d16 = self.get_word();
+                    self.reg.set_de(d16);
+                }
                 0x0C => self.reg.c += 1,
                 0x0E => self.reg.c = self.get_byte(),
-                0x3E => self.reg.a = self.get_byte(),
+                0x1A => self.reg.a = self.mmu.read_byte(self.reg.de()),
                 0x20 => {
+                    let b = self.get_signed_byte() as u16; // Need to get byte to inc PC either way.
                     if !self.reg.flag_z() {
-                        self.pc = self.pc.wrapping_add(self.get_signed_byte() as u16);
+                        self.pc = self.pc.wrapping_add(b);
                         condition_met = true;
+                    } else {
+                        println!("else");
                     }
                 }
                 0x21 => {
@@ -59,12 +88,23 @@ impl CPU {
                 0x31 => self.sp = self.get_word(),
                 0x32 => {
                     self.mmu.write(self.reg.hl(), self.reg.a); // Set (HL) to A.
-                    self.reg.set_hl(self.reg.hl().wrapping_sub(1)); // Decrement.
+                    let new_hl = self.reg.hl().wrapping_sub(1);
+                    self.reg.set_hl(new_hl); // Decrement.
                 }
+                0x3E => self.reg.a = self.get_byte(),
                 0x77 => self.mmu.write(self.reg.hl(), self.reg.a),
                 0x7C => self.reg.a = self.reg.h,
                 0x9F => self.reg.alu_sbc(self.reg.a),
                 0xAF => self.reg.alu_xor(self.reg.a),
+                0xCD => {
+                    let a16 = self.get_word(); // Advances self.pc to the next instruction.
+                    self.push_stack(self.pc); // self.pc is the next instruction to be run.
+                    self.pc = a16;
+                }
+                0xE0 => {
+                    let addr = self.get_byte();
+                    self.mmu.write(0xFF00 + addr as u16, self.reg.a);
+                }
                 0xE2 => self.mmu.write(0xFF00 + self.reg.c as u16, self.reg.a),
 
                 _ => panic!(
@@ -74,7 +114,7 @@ impl CPU {
             }
         } else {
             match opcode {
-                0x7C => self.reg.alu_bit(self.reg.h, 7),
+                0x7C => self.reg.alu_bit(7, self.reg.h),
                 _ => panic!(
                     "CBPREFIX Opcode: {} not handled.",
                     self.opcodes.get_opcode_repr(opcode, is_cbprefix)
@@ -88,6 +128,13 @@ impl CPU {
         }
 
         cycles
+    }
+
+    /// Push a 16-bit value (an address of the an instruction) to the stack.
+    /// Stack decrements by one first (it grows downward in address space at the top of low RAM).
+    fn push_stack(&mut self, address: u16) {
+        self.sp -= 1;
+        self.mmu.write_word(self.sp, address);
     }
 
     /// Get the next byte and advance the program counter by 1.

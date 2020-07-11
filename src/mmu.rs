@@ -48,8 +48,16 @@ impl MMU {
         (msb << 8) | lsb
     }
 
+    /// Write an 8-bit value to an address.
     pub fn write(&mut self, address: u16, value: u8) {
         self.memory[address as usize] = value;
+    }
+
+    /// Write a 16-bit value to an address and the immediate address after.
+    /// DMG-01 is little endian so the least-significant byte is written first.
+    pub fn write_word(&mut self, address: u16, value: u16) {
+        self.write(address, (value & 0xFF) as u8); // Mask only the LSB.
+        self.write(address + 1, (value >> 8) as u8); // bit-shift until we have only the MSB.
     }
 
     /// Load the boot loader ROM from file.
@@ -68,11 +76,19 @@ mod tests {
     use super::*;
 
     #[test]
-    fn it_reads_a_word() {
+    fn test_read_word() {
         let mut mmu = MMU::new();
         mmu.memory[0] = 0xFF;
         mmu.memory[1] = 0x11;
         let word = mmu.read_word(0x00);
         assert_eq!(word, 0x11FF);
+    }
+
+    #[test]
+    fn test_write_word() {
+        let mut mmu = MMU::new();
+        mmu.write_word(0x0, 0xFF11);
+        assert_eq!(mmu.memory[0], 0x11);
+        assert_eq!(mmu.memory[1], 0xFF);
     }
 }
