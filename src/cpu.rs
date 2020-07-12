@@ -63,6 +63,7 @@ impl CPU {
                     let d16 = self.get_word();
                     self.reg.set_de(d16);
                 }
+                0x13 => self.reg.set_de(self.reg.de().wrapping_add(1)),
                 0x17 => {
                     // RLA is same as RL A but Z flag is unset.
                     self.reg.a = self.reg.alu_rl(self.reg.a);
@@ -76,14 +77,18 @@ impl CPU {
                     if !self.reg.flag_z() {
                         self.pc = self.pc.wrapping_add(b);
                         condition_met = true;
-                    } else {
-                        println!("else");
                     }
                 }
                 0x21 => {
                     let b = self.get_word();
                     self.reg.set_hl(b)
                 }
+                0x22 => {
+                    self.mmu.write(self.reg.hl(), self.reg.a);
+                    let new_hl = self.reg.hl().wrapping_add(1);
+                    self.reg.set_hl(new_hl);
+                }
+                0x23 => self.reg.set_hl(self.reg.hl().wrapping_add(1)),
                 0x31 => self.sp = self.get_word(),
                 0x32 => {
                     self.mmu.write(self.reg.hl(), self.reg.a); // Set (HL) to A.
@@ -93,6 +98,7 @@ impl CPU {
                 0x3E => self.reg.a = self.get_byte(),
                 0x4F => self.reg.c = self.reg.a,
                 0x77 => self.mmu.write(self.reg.hl(), self.reg.a),
+                0x7B => self.reg.a = self.reg.e,
                 0x7C => self.reg.a = self.reg.h,
                 0x9F => self.reg.alu_sbc(self.reg.a),
                 0xAF => self.reg.alu_xor(self.reg.a),
@@ -101,6 +107,7 @@ impl CPU {
                     self.reg.set_bc(address);
                 }
                 0xC5 => self.push_stack(self.reg.bc()),
+                0xC9 => self.pc = self.pop_stack(),
                 0xCD => {
                     let a16 = self.get_word(); // Advances self.pc to the next instruction.
                     self.push_stack(self.pc); // self.pc is the next instruction to be run.
@@ -172,7 +179,7 @@ impl CPU {
     /// Debug function. Panic when an opcode is not handled.
     fn panic_opcode(&self, opcode: u8, is_cbprefix: bool, operation_address: u16) {
         let msg = format!(
-            "{} {:#x}",
+            "{} {:#06x}",
             self.opcodes.get_opcode_repr(opcode, is_cbprefix),
             operation_address
         );

@@ -67,7 +67,7 @@ impl OpCodes {
                 operand_str.push('-');
             }
 
-            if let Some(false) = operand.increment {
+            if let Some(true) = operand.increment {
                 operand_str.push('+');
             }
 

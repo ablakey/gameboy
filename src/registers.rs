@@ -74,6 +74,7 @@ impl Registers {
     }
 
     /// Increment register value. Set Z if zero, H if half carry (bit 3), N reset.
+    /// Not to be used for INC r16 (eg. INC DE) as those do not have flag effects.
     pub fn alu_inc(&mut self, value: u8) -> u8 {
         let new_value = value.wrapping_add(1);
 
@@ -88,9 +89,12 @@ impl Registers {
 
     pub fn alu_dec(&mut self, value: u8) -> u8 {
         let new_value = value.wrapping_sub(1);
-        self.set_flag_h(((0xF & value) + 1) > 0xF); // See alu_inc about half carry.
+
         self.set_flag_z(new_value == 0);
-        self.set_flag_n(false);
+        self.set_flag_n(true);
+
+        // There's a half borrow (bit 4) if bits 0-3 have nothing to borrow.
+        self.set_flag_h((0x0F & value) == 0);
 
         new_value
     }
@@ -209,9 +213,9 @@ mod tests {
     #[test]
     fn test_alu_dec() {
         let mut reg = Registers::new();
-        reg.a = 0xFF;
+        reg.a = 0x10; // There will be a half-borrow.
         reg.a = reg.alu_dec(reg.a);
-        assert_eq!(reg.a, 0xFE);
+        assert_eq!(reg.a, 0x0F);
         assert_flags!(reg, false, true, true, false);
     }
 
