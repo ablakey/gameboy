@@ -99,7 +99,7 @@ impl OpCodes {
         };
 
         format!(
-            "{:#6X} {:4} {:12} {} {:5} [{} {} {} {}]",
+            "{:#04x} {:4} {:12} {} {:5} [{} {} {} {}]",
             full_opcode_number,
             opcode.mnemonic,
             operand_strings,

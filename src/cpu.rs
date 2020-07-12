@@ -14,10 +14,10 @@ impl CPU {
     /// Initialise the CPU, its pointers, MMU, and registers.
     ///
     /// The Stack:
-    /// The stack pointer begins one above the topmost address allocated to the stack. It decrements
-    /// automatically when used, so first use will push to stack at 0xDFFF. Stack increases
-    /// downwards. http://gameboy.mongenel.com/dmg/asmmemmap.html explains that high ram was
-    /// originally meant for the stack. By starting at 0xE001 we can decrement by 2 addresses
+    /// The stack pointer begins one word above the topmost address allocated to the stack. It
+    /// decrements automatically when used, so first use will push to stack at 0xDFFF. Stack
+    /// increases downwards. http://gameboy.mongenel.com/dmg/asmmemmap.html explains that high ram
+    /// was originally meant for the stack. By starting at 0xE001 we can decrement by 2 addresses
     /// given every address put on the stack is a word in length.
     ///
     /// Program Counter:
@@ -57,8 +57,12 @@ impl CPU {
         // Match an opcode and manipulate memory accordingly.
         if !is_cbprefix {
             match opcode {
+                0x04 => self.reg.b = self.reg.alu_inc(self.reg.b),
                 0x05 => self.reg.b = self.reg.alu_dec(self.reg.b),
                 0x06 => self.reg.b = self.get_byte(),
+                0x0C => self.reg.c += 1,
+                0x0D => self.reg.c = self.reg.alu_dec(self.reg.c),
+                0x0E => self.reg.c = self.get_byte(),
                 0x11 => {
                     let d16 = self.get_word();
                     self.reg.set_de(d16);
@@ -69,13 +73,17 @@ impl CPU {
                     self.reg.a = self.reg.alu_rl(self.reg.a);
                     self.reg.set_flag_z(false);
                 }
-                0x0C => self.reg.c += 1,
-                0x0E => self.reg.c = self.get_byte(),
+                0x18 => {
+                    let r8 = self.get_signed_byte(); // Must get first as it mutates PC.
+                    self.pc = self.pc.wrapping_add(r8 as u16);
+                }
                 0x1A => self.reg.a = self.mmu.read_byte(self.reg.de()),
+                0x1E => self.reg.e = self.get_byte(),
                 0x20 => {
-                    let b = self.get_signed_byte() as u16; // Need to get byte to inc PC either way.
+                    // Need to get byte to inc PC either way.
+                    let r8 = self.get_signed_byte();
                     if !self.reg.flag_z() {
-                        self.pc = self.pc.wrapping_add(b);
+                        self.pc = self.pc.wrapping_add(r8 as u16);
                         condition_met = true;
                     }
                 }
@@ -89,14 +97,25 @@ impl CPU {
                     self.reg.set_hl(new_hl);
                 }
                 0x23 => self.reg.set_hl(self.reg.hl().wrapping_add(1)),
+                0x28 => {
+                    let r8 = self.get_signed_byte() as u16;
+                    if self.reg.flag_z() {
+                        self.pc = self.pc.wrapping_add(r8 as u16);
+                        condition_met = true;
+                    }
+                }
+                0x2E => self.reg.l = self.get_byte(),
                 0x31 => self.sp = self.get_word(),
                 0x32 => {
                     self.mmu.write(self.reg.hl(), self.reg.a); // Set (HL) to A.
                     let new_hl = self.reg.hl().wrapping_sub(1);
                     self.reg.set_hl(new_hl); // Decrement.
                 }
+                0x3D => self.reg.a = self.reg.alu_dec(self.reg.a),
                 0x3E => self.reg.a = self.get_byte(),
                 0x4F => self.reg.c = self.reg.a,
+                0x57 => self.reg.d = self.reg.a,
+                0x67 => self.reg.h = self.reg.a,
                 0x77 => self.mmu.write(self.reg.hl(), self.reg.a),
                 0x7B => self.reg.a = self.reg.e,
                 0x7C => self.reg.a = self.reg.h,
@@ -118,6 +137,14 @@ impl CPU {
                     self.mmu.write(0xFF00 + addr as u16, self.reg.a);
                 }
                 0xE2 => self.mmu.write(0xFF00 + self.reg.c as u16, self.reg.a),
+                0xEA => {
+                    let d8 = self.get_word();
+                    self.mmu.write(d8, self.reg.a)
+                }
+                0xFE => {
+                    let d8 = self.get_byte();
+                    self.reg.alu_cp(d8)
+                }
                 _ => self.panic_opcode(opcode, is_cbprefix, op_address),
             }
         } else {

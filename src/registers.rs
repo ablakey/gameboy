@@ -75,6 +75,7 @@ impl Registers {
 
     /// Increment register value. Set Z if zero, H if half carry (bit 3), N reset.
     /// Not to be used for INC r16 (eg. INC DE) as those do not have flag effects.
+    /// Flags: [Z 0 H -]
     pub fn alu_inc(&mut self, value: u8) -> u8 {
         let new_value = value.wrapping_add(1);
 
@@ -87,6 +88,8 @@ impl Registers {
         new_value
     }
 
+    /// Decrement value by 1.
+    /// Flags: [Z 1 H -]
     pub fn alu_dec(&mut self, value: u8) -> u8 {
         let new_value = value.wrapping_sub(1);
 
@@ -114,6 +117,7 @@ impl Registers {
     /// and calculating a full borrow of that. This is done by seeing if the operand is greater than
     /// self.a, because that means there would be a wrap around (aka a borrow happens).
     /// C is set if there is a full borrow. Same method for detecting: is the operand larger?
+    /// Flags: [Z 1 H C]
     pub fn alu_sub(&mut self, value: u8) {
         let new_a = self.a.wrapping_sub(value);
         self.set_flag_z(new_a == 0);
@@ -138,6 +142,14 @@ impl Registers {
         self.set_flag_n(false);
         self.set_flag_c((value & 0x80) == 0x80); // If the value's MSB is 1, there's a carry.
         new_value
+    }
+
+    /// Subtract value from A and update registers. Do not change A.
+    pub fn alu_cp(&mut self, value: u8) {
+        self.set_flag_z(self.a.wrapping_sub(value) == 0);
+        self.set_flag_n(true);
+        self.set_flag_h((self.a & 0x0F) < (value & 0x0F));
+        self.set_flag_c(self.a < value);
     }
 }
 
@@ -263,6 +275,24 @@ mod tests {
         reg.a = 0xFF;
         reg.alu_sub(0xFF);
         assert_eq!(reg.a, 0x00);
+        assert_flags!(reg, true, true, false, false);
+    }
+
+    #[test]
+    fn test_alu_cp() {
+        let mut reg = Registers::new();
+        reg.a = 0x10;
+        reg.alu_cp(0xFF);
+        assert_eq!(reg.a, 0x10); // Does not get changed.
+        assert_flags!(reg, false, true, true, true);
+    }
+
+    #[test]
+    fn test_alu_cp_no_borrows() {
+        let mut reg = Registers::new();
+        reg.a = 0xFF;
+        reg.alu_cp(0xFF);
+        assert_eq!(reg.a, 0xFF);
         assert_flags!(reg, true, true, false, false);
     }
 
