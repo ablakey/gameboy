@@ -141,6 +141,10 @@ impl CPU {
                     let d8 = self.get_word();
                     self.mmu.write(d8, self.reg.a)
                 }
+                0xF0 => {
+                    let addr = 0xFF00 + (self.get_byte() as u16);
+                    self.reg.a = self.mmu.read_byte(addr);
+                }
                 0xFE => {
                     let d8 = self.get_byte();
                     self.reg.alu_cp(d8)
