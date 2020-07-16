@@ -22,14 +22,14 @@ macro_rules! create_register_pair {
 macro_rules! create_flag {
     ($getter:ident, $setter:ident, $mask:expr) => {
         pub fn $getter(&self) -> bool {
-            self.f & $mask != 0
+            self.f & (1 << $mask) != 0
         }
 
         pub fn $setter(&mut self, value: bool) {
             if value {
-                self.f |= $mask;
+                self.f |= (1 << $mask);
             } else {
-                self.f &= !$mask;
+                self.f &= !(1 << $mask);
             }
         }
     };
@@ -144,10 +144,10 @@ impl MMU {
         word
     }
 
-    create_flag!(flag_z, set_flag_z, 0b10000000);
-    create_flag!(flag_n, set_flag_n, 0b01000000);
-    create_flag!(flag_h, set_flag_h, 0b00100000);
-    create_flag!(flag_c, set_flag_c, 0b00010000);
+    create_flag!(flag_z, set_flag_z, 7);
+    create_flag!(flag_n, set_flag_n, 6);
+    create_flag!(flag_h, set_flag_h, 5);
+    create_flag!(flag_c, set_flag_c, 4);
 
     create_register_pair!(af, set_af, a, f);
     create_register_pair!(bc, set_bc, b, c);

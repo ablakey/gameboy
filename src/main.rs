@@ -1,15 +1,7 @@
-mod alu;
-mod cpu;
-mod debugger;
-mod input;
-mod mmu;
-mod opcode;
-mod screen;
-use cpu::CPU;
-use debugger::init_debugger;
-use input::{Input, InputEvent};
-use mmu::MMU;
-use screen::Screen;
+mod emulator;
+mod host;
+use emulator::{CPU, MMU};
+use host::{init_debugger, Input, InputEvent, Screen};
 use sdl2;
 
 fn main() {
