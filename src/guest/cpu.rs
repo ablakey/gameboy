@@ -57,6 +57,14 @@ impl CPU {
         let de = mmu.de();
         let hl = mmu.hl();
 
+        info!(
+            "{} {:#x}",
+            self.opcodes.get_opcode_repr(opcode, is_cbprefix),
+            op_address
+        );
+
+        println!("{:x}", mmu.pc);
+
         // Match an opcode and manipulate memory accordingly.
         if !is_cbprefix {
             match opcode {
@@ -80,7 +88,7 @@ impl CPU {
                     let r8 = mmu.get_signed_byte(); // Must get first as it mutates PC.
                     mmu.pc = pc.wrapping_add(r8 as u16);
                 }
-                0x1A => mmu.a = mmu.read_byte(de),
+                0x1A => mmu.a = mmu.rb(de),
                 0x1E => mmu.e = mmu.get_next_byte(),
                 0x20 => {
                     // Need to get byte to inc PC either way.
@@ -95,7 +103,7 @@ impl CPU {
                     mmu.set_hl(b)
                 }
                 0x22 => {
-                    mmu.write(hl, a);
+                    mmu.wb(hl, a);
                     let new_hl = hl.wrapping_add(1);
                     mmu.set_hl(new_hl);
                 }
@@ -110,7 +118,7 @@ impl CPU {
                 0x2E => mmu.l = mmu.get_next_byte(),
                 0x31 => mmu.sp = mmu.get_next_word(),
                 0x32 => {
-                    mmu.write(hl, a); // Set (HL) to A.
+                    mmu.wb(hl, a); // Set (HL) to A.
                     let new_hl = hl.wrapping_sub(1);
                     mmu.set_hl(new_hl); // Decrement.
                 }
@@ -119,7 +127,7 @@ impl CPU {
                 0x4F => mmu.c = a,
                 0x57 => mmu.d = a,
                 0x67 => mmu.h = a,
-                0x77 => mmu.write(hl, a),
+                0x77 => mmu.wb(hl, a),
                 0x7B => mmu.a = e,
                 0x7C => mmu.a = h,
                 0x9F => alu_sbc(mmu, a),
@@ -137,16 +145,16 @@ impl CPU {
                 }
                 0xE0 => {
                     let addr = mmu.get_next_byte();
-                    mmu.write(0xFF00 + addr as u16, a);
+                    mmu.wb(0xFF00 + addr as u16, a);
                 }
-                0xE2 => mmu.write(0xFF00 + c as u16, a),
+                0xE2 => mmu.wb(0xFF00 + c as u16, a),
                 0xEA => {
                     let d8 = mmu.get_next_word();
-                    mmu.write(d8, a)
+                    mmu.wb(d8, a)
                 }
                 0xF0 => {
                     let addr = 0xFF00 + (mmu.get_next_byte() as u16);
-                    mmu.a = mmu.read_byte(addr);
+                    mmu.a = mmu.rb(addr);
                 }
                 0xFE => {
                     let d8 = mmu.get_next_byte();
@@ -166,12 +174,6 @@ impl CPU {
         if condition_met {
             cycles = self.opcodes.get_cycles(opcode, is_cbprefix, false);
         }
-
-        info!(
-            "{} {:#x}",
-            self.opcodes.get_opcode_repr(opcode, is_cbprefix),
-            op_address
-        );
 
         cycles
     }

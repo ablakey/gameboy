@@ -1,15 +1,31 @@
+mod bootloader;
+mod cartridge;
+mod hwregisters;
 mod registers;
-use std::fs::File;
-use std::io;
-use std::io::prelude::*;
-type BootLoader = [u8; 0x100];
-type SRAM = [u8; 0x2000]; // 8KB of DMG-01 memory.
+use bootloader::BootLoader;
+use cartridge::Cartridge;
+use hwregisters::HardwareRegisters;
 
-const STACK_TOP: u16 = 0xDFFF;
+/// Memory map addresses
+const HWREG_TOP: u16 = 0xFF7F;
+const HWREG_BOT: u16 = 0xFF00;
+const STACK_TOP: u16 = 0xDFFF; // Stack is put at the top of SRAM and grows downwards.
+const SRAM_TOP: u16 = 0xDFFF;
+const SRAM_BOT: u16 = 0xC000;
+// const CART_RAM_TOP: u16 = 0xBFFF; // Aka Switchable RAM bank (RAM that lives. in a cartridge)
+// const CART_RAM_BOT: u16 = 0xA000;
+const CART_ROM_TOP: u16 = 0x7FFF; // Range includes parts of cartridge like interrupt vectors.
+const CART_ROM_BOT: u16 = 0x0000;
+const VRAM_TOP: u16 = 0x9FFF;
+const VRAM_BOT: u16 = 0x8000;
 
 // TODO explain (that MMU has memory, registers, io regsiters (TBD) and other state)
 pub struct MMU {
-    sram: SRAM,
+    sram: [u8; 0x2000], // 8KB of DMG-01 memory.
+    vram: [u8; 0x2000], // 8KB of DMG-01 memory.
+    boot: BootLoader,
+    hwreg: HardwareRegisters,
+    cart: Cartridge,
     pub pc: u16,
     pub sp: u16,
     pub a: u8,
@@ -24,16 +40,14 @@ pub struct MMU {
 
 // TODO explain
 impl MMU {
-    const BOOT_ROM_PATH: &'static str = "data/dmg_rom.bin";
-
     /// Initialize the MMU by loading the boot_rom into the first 256 addressable bytes.
     pub fn new() -> Self {
-        let boot_loader = Self::load_boot_rom().unwrap();
-        let mut sram = [0; 0x2000];
-        sram[0..0x100].clone_from_slice(&boot_loader);
-
         Self {
-            sram,
+            sram: [0; 0x2000],
+            vram: [0; 0x2000],
+            boot: BootLoader::new(),
+            hwreg: HardwareRegisters::new(),
+            cart: Cartridge::new(),
             pc: 0,
             sp: STACK_TOP + 1, // Stack increases downwards. Start one word above.
             a: 0,
@@ -48,39 +62,44 @@ impl MMU {
     }
 
     /// Read a byte from address.
-    pub fn read_byte(&self, address: u16) -> u8 {
+    pub fn rb(&self, address: u16) -> u8 {
         match address {
-            0xC000..=0xDFFF => self.sram[(address - 0xC000) as usize],
+            0x00..=0xFF => self.boot.rb(address), // When bootloader is done, need to remap.
+            SRAM_BOT..=SRAM_TOP => self.sram[(address - SRAM_BOT) as usize],
+            VRAM_BOT..=VRAM_TOP => self.vram[(address - VRAM_BOT) as usize],
+            CART_ROM_BOT..=CART_ROM_TOP => self.cart.rb(address),
             _ => panic!("Tried to read from {:#x} which is not mapped.", address),
+        }
+    }
+
+    /// Write an 8-bit value to an address.
+    pub fn wb(&mut self, address: u16, value: u8) {
+        match address {
+            HWREG_BOT..=HWREG_TOP => self.hwreg.set(address, value),
+            VRAM_BOT..=VRAM_TOP => self.vram[(address - VRAM_BOT) as usize] = value,
+            SRAM_BOT..=SRAM_TOP => self.sram[(address - SRAM_BOT) as usize] = value,
+            _ => panic!("Tried to write to {:#x} which is not mapped.", address),
         }
     }
 
     /// Read a word from address.
     /// DMG-01 is little endian so the least-significant byte is read first.
-    pub fn read_word(&self, address: u16) -> u16 {
-        let lsb = self.read_byte(address) as u16;
-        let msb = self.read_byte(address + 1) as u16;
+    pub fn rw(&self, address: u16) -> u16 {
+        let lsb = self.rb(address) as u16;
+        let msb = self.rb(address + 1) as u16;
         (msb << 8) | lsb
-    }
-
-    /// Write an 8-bit value to an address.
-    pub fn write(&mut self, address: u16, value: u8) {
-        match address {
-            0xC000..=0xDFFF => self.sram[(address - 0xC000) as usize] = value,
-            _ => panic!("Tried to write to {:#x} which is not mapped.", address),
-        }
     }
 
     /// Write a 16-bit value to an address and the immediate address after.
     /// DMG-01 is little endian so the least-significant byte is written first.
-    pub fn write_word(&mut self, address: u16, value: u16) {
-        self.write(address, (value & 0xFF) as u8); // Mask only the LSB.
-        self.write(address + 1, (value >> 8) as u8); // bit-shift until we have only the MSB.
+    pub fn ww(&mut self, address: u16, value: u16) {
+        self.wb(address, (value & 0xFF) as u8); // Mask only the LSB.
+        self.wb(address + 1, (value >> 8) as u8); // bit-shift until we have only the MSB.
     }
 
     /// Get the next byte and advance the program counter by 1.
     pub fn get_next_byte(&mut self) -> u8 {
-        let byte = self.read_byte(self.pc);
+        let byte = self.rb(self.pc);
         self.pc += 1;
         byte
     }
@@ -92,33 +111,22 @@ impl MMU {
 
     /// Get the next word in memory and advance the program counter by 2.
     pub fn get_next_word(&mut self) -> u16 {
-        let word = self.read_word(self.pc);
+        let word = self.rw(self.pc);
         self.pc += 2;
         word
-    }
-
-    /// Load the boot loader ROM from file.
-    /// This is a 256byte ROM referencable at 0x00 - 0xFF, containing the logic for validating
-    /// that the cartridge is legitimate, scolling the Nintendo logo and playing the chime.
-    pub fn load_boot_rom() -> io::Result<BootLoader> {
-        let mut f = File::open(Self::BOOT_ROM_PATH)?;
-        let mut buffer = [0; 0x100];
-        f.read(&mut buffer[..])?;
-        Ok(buffer)
     }
 
     /// Push a word (an address of the an instruction) to the stack.
     /// Stack decrements by one first (it grows downward in address space at the top of low RAM).
     pub fn push_stack(&mut self, address: u16) {
         self.sp -= 2;
-        println!("{:x}", self.sp);
-        self.write_word(self.sp, address);
+        self.ww(self.sp, address);
     }
 
     /// Pop a word off the stack.
     /// It will go into a register.
     pub fn pop_stack(&mut self) -> u16 {
-        let address = self.read_word(self.sp);
+        let address = self.rw(self.sp);
         self.sp += 2;
         address
     }
@@ -129,18 +137,18 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_read_word() {
+    fn test_rw() {
         let mut mmu = MMU::new();
         mmu.sram[0] = 0xFF;
         mmu.sram[1] = 0x11;
-        let word = mmu.read_word(0xC000);
+        let word = mmu.rw(0xC000);
         assert_eq!(word, 0x11FF);
     }
 
     #[test]
-    fn test_write_word() {
+    fn test_ww() {
         let mut mmu = MMU::new();
-        mmu.write_word(0xC000, 0xFF11);
+        mmu.ww(0xC000, 0xFF11);
         assert_eq!(mmu.sram[0], 0x11);
         assert_eq!(mmu.sram[1], 0xFF);
     }
@@ -152,9 +160,9 @@ mod tests {
         mmu.push_stack(0x22DD);
         assert_eq!(mmu.sp, 0xDFFC); // 4 bytes are on the stack.
 
-        // Written little endian, read_word reads as little endian and assembles back to a u16.
-        assert_eq!(mmu.read_word(mmu.sp), 0x22DD);
-        assert_eq!(mmu.read_word(mmu.sp + 2), 0x11FF);
+        // Written little endian, rw reads as little endian and assembles back to a u16.
+        assert_eq!(mmu.rw(mmu.sp), 0x22DD);
+        assert_eq!(mmu.rw(mmu.sp + 2), 0x11FF);
     }
 
     #[test]
@@ -164,49 +172,5 @@ mod tests {
         let value = mmu.pop_stack();
         assert_eq!(0x11FF, value);
         assert_eq!(mmu.sp, STACK_TOP + 1); // Stack Pointer has been reset.
-    }
-
-    /// Test setting the af register. Given each register is implemented using a macro, we only need
-    /// to test one of them.
-    #[test]
-    fn test_af() {
-        let mut mmu = MMU::new();
-        mmu.a = 0xFF;
-        mmu.f = 0x11;
-        assert_eq!(mmu.af(), 0xFF11)
-    }
-
-    /// Test getting the af register. Given each register is implemented using a macro, we only need
-    /// to test one of them.
-    #[test]
-    fn test_set_af() {
-        let mut mmu = MMU::new();
-        mmu.set_af(0xFF11);
-        assert_eq!(mmu.a, 0xFF);
-        assert_eq!(mmu.f, 0x11);
-    }
-
-    #[test]
-    fn test_get_flags() {
-        let mmu = &mut MMU::new();
-        mmu.f = 0b10100000;
-        assert_eq!(mmu.flag_z(), true);
-        assert_eq!(mmu.flag_h(), true);
-    }
-
-    #[test]
-    fn test_set_flags() {
-        let mut mmu = MMU::new();
-        mmu.set_flag_z(true);
-        mmu.set_flag_n(true);
-        mmu.set_flag_h(true);
-        mmu.set_flag_c(true);
-        assert_eq!(mmu.f, 0b11110000, "{:b}", mmu.f);
-
-        mmu.set_flag_z(true);
-        mmu.set_flag_n(true);
-        mmu.set_flag_h(false);
-        mmu.set_flag_c(false);
-        assert_eq!(mmu.f, 0b11000000, "{:b}", mmu.f);
     }
 }

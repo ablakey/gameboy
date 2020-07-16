@@ -6,7 +6,7 @@ pub struct Emulator {
     cpu: CPU,
     mmu: MMU,
     input: Input,
-    _screen: Screen,
+    // _screen: Screen,
     is_paused: bool,
 }
 
@@ -15,27 +15,28 @@ impl Emulator {
         // SDL-based host: graphics, sound, audio.
         let sdl_context = sdl2::init()?;
         let input = Input::new(&sdl_context)?;
-        let _screen = Screen::new(&sdl_context, 4)?;
+        // let _screen = Screen::new(&sdl_context, 4)?;
         Ok(Self {
             cpu: CPU::new(),
             mmu: MMU::new(),
             input,
             is_paused: false,
-            _screen,
+            // _screen,
         })
     }
 
     pub fn run_forever(&mut self) {
+        println!("start");
         'program: loop {
-            // Handle program I/O (events that affect the emulator).
-            match self.input.get_event() {
-                InputEvent::Exit => break 'program,
-                InputEvent::ToggleRun => self.is_paused = !self.is_paused,
-                InputEvent::Tick => {
-                    self.step();
-                }
-                _ => (),
-            }
+            // // Handle program I/O (events that affect the emulator).
+            // match self.input.get_event() {
+            //     InputEvent::Exit => break 'program,
+            //     InputEvent::ToggleRun => self.is_paused = !self.is_paused,
+            //     InputEvent::Tick => {
+            //         self.step();
+            //     }
+            //     _ => (),
+            // }
 
             if !self.is_paused {
                 self.step();
