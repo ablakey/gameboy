@@ -1,5 +1,5 @@
 use sdl2::event::Event;
-use sdl2::keyboard::{Keycode, Scancode};
+use sdl2::keyboard::Keycode;
 use sdl2::EventPump;
 
 #[derive(PartialEq)]
