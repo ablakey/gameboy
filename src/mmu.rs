@@ -35,6 +35,7 @@ macro_rules! create_flag {
     };
 }
 
+// TODO explain (that MMU has memory, registers, io regsiters (TBD) and other state)
 pub struct MMU {
     memory: Memory,
     pub pc: u16,
@@ -49,7 +50,7 @@ pub struct MMU {
     f: u8,
 }
 
-/// Constructor and general
+// TODO explain
 impl MMU {
     const BOOT_ROM_PATH: &'static str = "data/dmg_rom.bin";
 
