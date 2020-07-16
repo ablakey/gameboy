@@ -99,8 +99,8 @@ impl OpCodes {
         };
 
         format!(
-            "{:#04x} {:4} {:12} {} {:5} [{} {} {} {}]",
-            full_opcode_number,
+            "{:6} {:4} {:12} {} {:5} [{} {} {} {}]", // Ensure blank spaces for a 0xcb## opcode.
+            format!("{:#04x}", full_opcode_number),  // Ensure opcode padding.
             opcode.mnemonic,
             operand_strings,
             opcode.bytes,

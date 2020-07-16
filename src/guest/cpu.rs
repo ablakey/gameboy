@@ -33,12 +33,12 @@ impl CPU {
     pub fn step(&mut self, mmu: &mut MMU) -> u8 {
         let op_address = mmu.pc; // Hold onto operation address before mutating it, for debugging.
 
-        let mut opcode = mmu.get_byte();
+        let mut opcode = mmu.get_next_byte();
         let is_cbprefix = opcode == 0xCB;
 
         // If the byte is not the opcode but actually the prefix, get another byte.
         if is_cbprefix {
-            opcode = mmu.get_byte();
+            opcode = mmu.get_next_byte();
         }
 
         // The number of m-cycles required for this operation. This may be updated by an operation
@@ -62,12 +62,12 @@ impl CPU {
             match opcode {
                 0x04 => mmu.b = alu_inc(mmu, b),
                 0x05 => mmu.b = alu_dec(mmu, b),
-                0x06 => mmu.b = mmu.get_byte(),
+                0x06 => mmu.b = mmu.get_next_byte(),
                 0x0C => mmu.c += 1,
                 0x0D => mmu.c = alu_dec(mmu, c),
-                0x0E => mmu.c = mmu.get_byte(),
+                0x0E => mmu.c = mmu.get_next_byte(),
                 0x11 => {
-                    let d16 = mmu.get_word();
+                    let d16 = mmu.get_next_word();
                     mmu.set_de(d16);
                 }
                 0x13 => mmu.set_de(de.wrapping_add(1)),
@@ -81,7 +81,7 @@ impl CPU {
                     mmu.pc = pc.wrapping_add(r8 as u16);
                 }
                 0x1A => mmu.a = mmu.read_byte(de),
-                0x1E => mmu.e = mmu.get_byte(),
+                0x1E => mmu.e = mmu.get_next_byte(),
                 0x20 => {
                     // Need to get byte to inc PC either way.
                     let r8 = mmu.get_signed_byte();
@@ -91,7 +91,7 @@ impl CPU {
                     }
                 }
                 0x21 => {
-                    let b = mmu.get_word();
+                    let b = mmu.get_next_word();
                     mmu.set_hl(b)
                 }
                 0x22 => {
@@ -107,15 +107,15 @@ impl CPU {
                         condition_met = true;
                     }
                 }
-                0x2E => mmu.l = mmu.get_byte(),
-                0x31 => mmu.sp = mmu.get_word(),
+                0x2E => mmu.l = mmu.get_next_byte(),
+                0x31 => mmu.sp = mmu.get_next_word(),
                 0x32 => {
                     mmu.write(hl, a); // Set (HL) to A.
                     let new_hl = hl.wrapping_sub(1);
                     mmu.set_hl(new_hl); // Decrement.
                 }
                 0x3D => mmu.a = alu_dec(mmu, a),
-                0x3E => mmu.a = mmu.get_byte(),
+                0x3E => mmu.a = mmu.get_next_byte(),
                 0x4F => mmu.c = a,
                 0x57 => mmu.d = a,
                 0x67 => mmu.h = a,
@@ -131,25 +131,25 @@ impl CPU {
                 0xC5 => mmu.push_stack(bc),
                 0xC9 => mmu.pc = mmu.pop_stack(),
                 0xCD => {
-                    let a16 = mmu.get_word(); // Advances mmu.pc to the next instruction.
+                    let a16 = mmu.get_next_word(); // Advances mmu.pc to the next instruction.
                     mmu.push_stack(pc); // mmu.pc is the next instruction to be run.
                     mmu.pc = a16;
                 }
                 0xE0 => {
-                    let addr = mmu.get_byte();
+                    let addr = mmu.get_next_byte();
                     mmu.write(0xFF00 + addr as u16, a);
                 }
                 0xE2 => mmu.write(0xFF00 + c as u16, a),
                 0xEA => {
-                    let d8 = mmu.get_word();
+                    let d8 = mmu.get_next_word();
                     mmu.write(d8, a)
                 }
                 0xF0 => {
-                    let addr = 0xFF00 + (mmu.get_byte() as u16);
+                    let addr = 0xFF00 + (mmu.get_next_byte() as u16);
                     mmu.a = mmu.read_byte(addr);
                 }
                 0xFE => {
-                    let d8 = mmu.get_byte();
+                    let d8 = mmu.get_next_byte();
                     alu_cp(mmu, d8)
                 }
                 _ => self.panic_opcode(opcode, is_cbprefix, op_address),
