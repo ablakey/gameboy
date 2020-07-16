@@ -1,9 +1,9 @@
+mod alu;
 mod cpu;
 mod debugger;
 mod input;
 mod mmu;
 mod opcode;
-mod registers;
 mod screen;
 use cpu::CPU;
 use debugger::init_debugger;
@@ -20,14 +20,11 @@ fn main() {
         Ok(mut e) => e.run_forever(),
         Err(e) => panic!("Could not launch emulator. {}", e),
     }
-
-    // loop {
-    //     emulator.step();
-    // }
 }
 
 struct Emulator {
     cpu: CPU,
+    mmu: MMU,
     input: Input,
     screen: Screen,
     is_paused: bool,
@@ -41,6 +38,7 @@ impl Emulator {
         let screen = Screen::new(&sdl_context, 4)?;
         Ok(Self {
             cpu: CPU::new(),
+            mmu: MMU::new(),
             input,
             is_paused: false,
             screen,
@@ -69,6 +67,6 @@ impl Emulator {
     }
 
     pub fn step(&mut self) {
-        self.cpu.step();
+        self.cpu.step(&mut self.mmu);
     }
 }

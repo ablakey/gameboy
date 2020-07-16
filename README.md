@@ -9,10 +9,9 @@ DMG-01 Emulator in Rust
 @startuml
 
 rectangle Host {
-
-rectangle Screen
-rectangle Audio
-rectangle Input
+    rectangle Screen
+    rectangle Audio
+    rectangle Input
 }
 
 rectangle CPU
@@ -53,8 +52,23 @@ I've seen in some emulators, they just loop until an entire frame of work is don
 
 
 ## Rust implementation details
-I was thinking of providing access to each
 
+### MMU Sharing
+The MMU is the shared resource. Many things want to read/write it (and the data it can access). I first thought to use a RefCell to provide a reference to each unit(CPU, APU, PPU). Given my emulator would be single threaded lock-step operations, this would be fine. There's a runtime cost to ensure only one unit borrows at a time, but there would be no locking issues.
+
+However, I decided to go a simpler route as an attempt to experiment with how embracing rather than fighting the borrow checker changes architecture. My approach is for the MMU to be a top-level resource, owned by the same structure that owns the APU, PPU, CPU. When each unit gets a chance to do work, the MMU is passed in as a mutable borrow.
+
+In terms of code ergonomics, I don't think the RefCell helps much. I can't just do `self.mmu` I could have to do something like `self.borrow()` and litter that everywhere.  Easier to just lend out the MMU, do work, mutating it, and then get it back.
+
+A bonus is that for things that ought to be read only, I can lend out the MMU without `mut` and have greater confidence that the APU or whatnot isn't doing something silly.
+
+### Interrupts
+
+Not yet sure how to do interrupts. I think my main loop will just want to `unit.check_for_interrupt()` and then set the associated flags.
+
+
+### All state being in MMU
+In terms of how the DMG-01 is actually laid out, I'm going to bet the MMU does not actually posess all state.  That is, there's probably registers all over.  But rather than letting registers live with the CPU, I/O devices, etc. I will just make them members of the MMU structure. This makes it simple to look at state of the emulated machine and simplifies the story for save/load state as well.
 
 
 ## TODO:
