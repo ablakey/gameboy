@@ -7,22 +7,22 @@ use cartridge::Cartridge;
 use hwregisters::HardwareRegisters;
 
 /// Memory map addresses
+const HRAM_TOP: u16 = 0xFFFE;
+const HRAM_BOT: u16 = 0xFF80;
 const HWREG_TOP: u16 = 0xFF7F;
 const HWREG_BOT: u16 = 0xFF00;
-const STACK_TOP: u16 = 0xDFFF; // Stack is put at the top of SRAM and grows downwards.
 const SRAM_TOP: u16 = 0xDFFF;
 const SRAM_BOT: u16 = 0xC000;
-// const CART_RAM_TOP: u16 = 0xBFFF; // Aka Switchable RAM bank (RAM that lives. in a cartridge)
-// const CART_RAM_BOT: u16 = 0xA000;
-const CART_ROM_TOP: u16 = 0x7FFF; // Range includes parts of cartridge like interrupt vectors.
-const CART_ROM_BOT: u16 = 0x0000;
 const VRAM_TOP: u16 = 0x9FFF;
 const VRAM_BOT: u16 = 0x8000;
+const CART_ROM_TOP: u16 = 0x7FFF; // Range includes parts of cartridge like interrupt vectors.
+const CART_ROM_BOT: u16 = 0x0000;
 
 // TODO explain (that MMU has memory, registers, io regsiters (TBD) and other state)
 pub struct MMU {
-    sram: [u8; 0x2000], // 8KB of DMG-01 memory.
-    vram: [u8; 0x2000], // 8KB of DMG-01 memory.
+    hram: [u8; 0x7F],   // 127 bytes of "High RAM" (DMA accessible) aka Zero page.
+    sram: [u8; 0x2000], // 8KB (no GBC banking support).
+    vram: [u8; 0x2000], // 8KB graphics RAM.
     boot: BootLoader,
     hwreg: HardwareRegisters,
     cart: Cartridge,
@@ -43,13 +43,14 @@ impl MMU {
     /// Initialize the MMU by loading the boot_rom into the first 256 addressable bytes.
     pub fn new() -> Self {
         Self {
+            hram: [0; 0x7F],
             sram: [0; 0x2000],
             vram: [0; 0x2000],
             boot: BootLoader::new(),
             hwreg: HardwareRegisters::new(),
             cart: Cartridge::new(),
             pc: 0,
-            sp: STACK_TOP + 1, // Stack increases downwards. Start one word above.
+            sp: 0, // Initialized by the software.
             a: 0,
             b: 0,
             c: 0,
@@ -64,7 +65,9 @@ impl MMU {
     /// Read a byte from address.
     pub fn rb(&self, address: u16) -> u8 {
         match address {
+            0xFF46 => panic!("0xff46: OAM DMA cannot be read from."),
             0x00..=0xFF => self.boot.rb(address), // When bootloader is done, need to remap.
+            HRAM_BOT..=HRAM_TOP => self.hram[(address - HRAM_BOT) as usize],
             SRAM_BOT..=SRAM_TOP => self.sram[(address - SRAM_BOT) as usize],
             VRAM_BOT..=VRAM_TOP => self.vram[(address - VRAM_BOT) as usize],
             CART_ROM_BOT..=CART_ROM_TOP => self.cart.rb(address),
@@ -76,8 +79,9 @@ impl MMU {
     pub fn wb(&mut self, address: u16, value: u8) {
         match address {
             HWREG_BOT..=HWREG_TOP => self.hwreg.set(address, value),
-            VRAM_BOT..=VRAM_TOP => self.vram[(address - VRAM_BOT) as usize] = value,
+            HRAM_BOT..=HRAM_TOP => self.hram[(address - HRAM_BOT) as usize] = value,
             SRAM_BOT..=SRAM_TOP => self.sram[(address - SRAM_BOT) as usize] = value,
+            VRAM_BOT..=VRAM_TOP => self.vram[(address - VRAM_BOT) as usize] = value,
             _ => panic!("Tried to write to {:#x} which is not mapped.", address),
         }
     }
@@ -130,6 +134,13 @@ impl MMU {
         self.sp += 2;
         address
     }
+
+    pub fn oam_dma(&mut self, address: u16) {
+        // TODO: write 160 bytes from address -> OAM RAM.
+        // Assert that address is a multiple of 0x100  address % 0x100 == 0
+        // Write tests that set up some memory to be copied, performs a copy, and checks that it was
+        // copied. Can probably just set a byte at address and a byte at address + 159
+    }
 }
 
 #[cfg(test)]
@@ -156,9 +167,10 @@ mod tests {
     #[test]
     fn test_push_stack() {
         let mut mmu = MMU::new();
+        mmu.sp = 0xDFFF;
         mmu.push_stack(0x11FF);
         mmu.push_stack(0x22DD);
-        assert_eq!(mmu.sp, 0xDFFC); // 4 bytes are on the stack.
+        assert_eq!(mmu.sp, 0xDFFB); // 4 bytes are on the stack.
 
         // Written little endian, rw reads as little endian and assembles back to a u16.
         assert_eq!(mmu.rw(mmu.sp), 0x22DD);
@@ -168,9 +180,11 @@ mod tests {
     #[test]
     fn test_pop_stack() {
         let mut mmu = MMU::new();
+        mmu.sp = 0xfffe; // A common place to put the stack.
         mmu.push_stack(0x11FF);
+        assert_eq!(mmu.sp, 0xfffc); // Stack Pointer has been decremented to the next address slot.
         let value = mmu.pop_stack();
         assert_eq!(0x11FF, value);
-        assert_eq!(mmu.sp, STACK_TOP + 1); // Stack Pointer has been reset.
+        assert_eq!(mmu.sp, 0xfffe); // Stack Pointer has been reset.
     }
 }

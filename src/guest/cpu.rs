@@ -63,8 +63,6 @@ impl CPU {
             op_address
         );
 
-        println!("{:x}", mmu.pc);
-
         // Match an opcode and manipulate memory accordingly.
         if !is_cbprefix {
             match opcode {
@@ -116,7 +114,11 @@ impl CPU {
                     }
                 }
                 0x2E => mmu.l = mmu.get_next_byte(),
-                0x31 => mmu.sp = mmu.get_next_word(),
+                0x31 => {
+                    let w = mmu.get_next_word();
+                    println!("PC: {:x} next_word: {:x}", mmu.pc, w);
+                    mmu.sp = w
+                }
                 0x32 => {
                     mmu.wb(hl, a); // Set (HL) to A.
                     let new_hl = hl.wrapping_sub(1);
