@@ -78,6 +78,7 @@ impl MMU {
     /// Write an 8-bit value to an address.
     pub fn wb(&mut self, address: u16, value: u8) {
         match address {
+            0xFF46 => self.oam_dma(address),
             HWREG_BOT..=HWREG_TOP => self.hwreg.set(address, value),
             HRAM_BOT..=HRAM_TOP => self.hram[(address - HRAM_BOT) as usize] = value,
             SRAM_BOT..=SRAM_TOP => self.sram[(address - SRAM_BOT) as usize] = value,
