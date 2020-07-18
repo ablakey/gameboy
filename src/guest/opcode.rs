@@ -123,9 +123,9 @@ impl OpCodes {
         // We get first and last rather than indexes because we might want the last element
         // of an opcode that only has one possible cycle cost.
         if action_taken {
-            opcode.cycles.first().unwrap() / 4
+            *opcode.cycles.first().unwrap()
         } else {
-            opcode.cycles.last().unwrap() / 4
+            *opcode.cycles.last().unwrap()
         }
     }
 

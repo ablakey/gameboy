@@ -30,7 +30,7 @@ impl CPU {
     /// Perform a single opcode step and return how many cycles that took.
     /// Return the number of m-cycles required to perform the operation. This will be used for
     /// regulating how fast the CPU is emulated at.
-    pub fn step(&mut self, mmu: &mut MMU) -> u8 {
+    pub fn step(&self, mmu: &mut MMU) -> u8 {
         let op_address = mmu.pc; // Hold onto operation address before mutating it, for debugging.
 
         let mut opcode = mmu.get_next_byte();
@@ -49,9 +49,10 @@ impl CPU {
 
         // Convenient register values at beginning of this opcode. This just reduces a lot of
         // repetitiveness in the opcodes below. Writing still requires mutably borrowing mmu.
-        let MMU {
-            a, b, c, e, h, pc, ..
-        } = *mmu;
+        // Note: these are only valid because they aren't mutated more than once in an operation.
+        // The PC, for example, might be incremented in an operation, and then read from. Therefore
+        // getting the value of PC now would be a problem.
+        let MMU { a, b, c, e, h, .. } = *mmu;
 
         let bc = mmu.bc();
         let de = mmu.de();
@@ -84,7 +85,7 @@ impl CPU {
                 }
                 0x18 => {
                     let r8 = mmu.get_signed_byte(); // Must get first as it mutates PC.
-                    mmu.pc = pc.wrapping_add(r8 as u16);
+                    mmu.pc = mmu.pc.wrapping_add(r8 as u16);
                 }
                 0x1A => mmu.a = mmu.rb(de),
                 0x1E => mmu.e = mmu.get_next_byte(),
@@ -92,7 +93,7 @@ impl CPU {
                     // Need to get byte to inc PC either way.
                     let r8 = mmu.get_signed_byte();
                     if !mmu.flag_z() {
-                        mmu.pc = pc.wrapping_add(r8 as u16);
+                        mmu.pc = mmu.pc.wrapping_add(r8 as u16);
                         condition_met = true;
                     }
                 }
@@ -116,7 +117,6 @@ impl CPU {
                 0x2E => mmu.l = mmu.get_next_byte(),
                 0x31 => {
                     let w = mmu.get_next_word();
-                    println!("PC: {:x} next_word: {:x}", mmu.pc, w);
                     mmu.sp = w
                 }
                 0x32 => {
@@ -142,7 +142,7 @@ impl CPU {
                 0xC9 => mmu.pc = mmu.pop_stack(),
                 0xCD => {
                     let a16 = mmu.get_next_word(); // Advances mmu.pc to the next instruction.
-                    mmu.push_stack(pc); // mmu.pc is the next instruction to be run.
+                    mmu.push_stack(mmu.pc); // mmu.pc is the next instruction to be run.
                     mmu.pc = a16;
                 }
                 0xE0 => {

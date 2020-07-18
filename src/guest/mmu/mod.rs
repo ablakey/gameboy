@@ -1,10 +1,10 @@
 mod bootloader;
 mod cartridge;
-mod hwregisters;
-mod registers;
+mod hwreg;
+mod reg;
 use bootloader::BootLoader;
 use cartridge::Cartridge;
-use hwregisters::HardwareRegisters;
+use hwreg::HardwareRegisters;
 
 /// Memory map addresses
 const HRAM_TOP: u16 = 0xFFFE;
@@ -67,6 +67,7 @@ impl MMU {
         match address {
             0xFF46 => panic!("0xff46: OAM DMA cannot be read from."),
             0x00..=0xFF => self.boot.rb(address), // When bootloader is done, need to remap.
+            HWREG_BOT..=HWREG_TOP => self.hwreg.get(address), // Some are not readable.
             HRAM_BOT..=HRAM_TOP => self.hram[(address - HRAM_BOT) as usize],
             SRAM_BOT..=SRAM_TOP => self.sram[(address - SRAM_BOT) as usize],
             VRAM_BOT..=VRAM_TOP => self.vram[(address - VRAM_BOT) as usize],
@@ -79,7 +80,7 @@ impl MMU {
     pub fn wb(&mut self, address: u16, value: u8) {
         match address {
             0xFF46 => self.oam_dma(address),
-            HWREG_BOT..=HWREG_TOP => self.hwreg.set(address, value),
+            HWREG_BOT..=HWREG_TOP => self.hwreg.set(address, value), // Some are not writable.
             HRAM_BOT..=HRAM_TOP => self.hram[(address - HRAM_BOT) as usize] = value,
             SRAM_BOT..=SRAM_TOP => self.sram[(address - SRAM_BOT) as usize] = value,
             VRAM_BOT..=VRAM_TOP => self.vram[(address - VRAM_BOT) as usize] = value,
