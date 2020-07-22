@@ -8,7 +8,7 @@ pub struct Emulator {
     ppu: PPU,
     mmu: MMU,
     input: Input,
-    _screen: Screen,
+    screen: Screen,
     is_paused: bool,
     now: SystemTime,
 }
@@ -18,14 +18,14 @@ impl Emulator {
         // SDL-based host: graphics, sound, audio.
         let sdl_context = sdl2::init()?;
         let input = Input::new(&sdl_context)?;
-        let _screen = Screen::new(&sdl_context, 4)?;
+        let screen = Screen::new(&sdl_context, 4)?;
         Ok(Self {
             cpu: CPU::new(),
             mmu: MMU::new(),
             ppu: PPU::new(),
             input,
             is_paused: false,
-            _screen,
+            screen,
             now: SystemTime::now(),
         })
     }
@@ -65,5 +65,8 @@ impl Emulator {
                 break 'frame;
             }
         }
+
+        // Draw the frame.
+        self.screen.draw(&self.ppu.image_buffer);
     }
 }

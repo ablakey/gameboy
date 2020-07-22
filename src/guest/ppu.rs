@@ -1,13 +1,16 @@
 pub struct PPU {
     modeclock: usize, // Current clock step representing where the PPU is in its processing cycle.
-                      // An image buffer.
+    pub image_buffer: [u8; 160 * 144],
 }
 use super::MMU;
 use log::info;
 
 impl PPU {
     pub fn new() -> Self {
-        Self { modeclock: 0 }
+        Self {
+            modeclock: 0,
+            image_buffer: [0; 160 * 144],
+        }
     }
 
     /// TODO: explain the mode cycle and clocks.
@@ -69,5 +72,7 @@ impl PPU {
         }
     }
 
-    fn draw_scanline(&self) {}
+    fn draw_scanline(&mut self) {
+        self.image_buffer[0] = 1;
+    }
 }
