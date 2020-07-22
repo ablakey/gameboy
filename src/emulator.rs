@@ -1,11 +1,11 @@
-use super::guest::{CPU, GPU, MMU};
+use super::guest::{CPU, MMU, PPU};
 use super::host::{Input, InputEvent, Screen};
 use sdl2;
 use std::time::{Duration, SystemTime};
 
 pub struct Emulator {
     cpu: CPU,
-    gpu: GPU,
+    ppu: PPU,
     mmu: MMU,
     input: Input,
     _screen: Screen,
@@ -22,7 +22,7 @@ impl Emulator {
         Ok(Self {
             cpu: CPU::new(),
             mmu: MMU::new(),
-            gpu: GPU::new(),
+            ppu: PPU::new(),
             input,
             is_paused: false,
             _screen,
@@ -55,9 +55,9 @@ impl Emulator {
     fn emulate_frame(&mut self) {
         let mut cycle_count: usize = 0;
         'frame: loop {
-            // TODO: this loop will expand to step one line at a time through the CPU, GPU, APU.
+            // TODO: this loop will expand to step one line at a time through the CPU, PPU, APU.
             let cycles = self.cpu.step(&mut self.mmu);
-            self.gpu.step(cycles, &mut self.mmu);
+            self.ppu.step(&mut self.mmu, cycles);
             cycle_count += cycles as usize;
 
             // 4Mhz cpu at 60fps.

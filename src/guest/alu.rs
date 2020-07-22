@@ -17,9 +17,9 @@ pub fn alu_inc(m: &mut MMU, value: u8) -> u8 {
 
     // Calculate a half-carry by isolating the low nibble, adding one, and seeing if the result
     // is larger than 0xF (fourth bit is high).
-    m.set_flag_h(((0xF & value) + 1) > 0xF);
     m.set_flag_z(new_value == 0);
     m.set_flag_n(false);
+    m.set_flag_h(((0xF & value) + 1) > 0xF);
 
     new_value
 }
@@ -80,7 +80,10 @@ pub fn alu_rl(m: &mut MMU, value: u8) -> u8 {
     new_value
 }
 
-/// Subtract value from A and update registers. Do not change A.
+/// Subtract value from A and update registers. Do not change A. This is used as a way to compare
+/// values, given the flags change, a program can then look at the flags (usually Z) to see
+/// if the result was zero or not.
+/// Flags: [Z 1 H C]
 pub fn alu_cp(m: &mut MMU, value: u8) {
     m.set_flag_z(m.a.wrapping_sub(value) == 0);
     m.set_flag_n(true);

@@ -2,7 +2,7 @@ use super::opcode::OpCodes;
 
 use super::alu::*;
 use super::MMU;
-use log::{error, info};
+use log::error;
 pub struct CPU {
     opcodes: OpCodes,
 }
@@ -52,17 +52,19 @@ impl CPU {
         // Note: these are only valid because they aren't mutated more than once in an operation.
         // The PC, for example, might be incremented in an operation, and then read from. Therefore
         // getting the value of PC now would be a problem.
-        let MMU { a, b, c, e, h, .. } = *mmu;
+        let MMU {
+            a, b, c, d, e, h, ..
+        } = *mmu;
 
         let bc = mmu.bc();
         let de = mmu.de();
         let hl = mmu.hl();
 
-        info!(
-            "{} {:#x}",
-            self.opcodes.get_opcode_repr(opcode, is_cbprefix),
-            op_address
-        );
+        // println!(
+        //     "{} {:#x}",
+        //     self.opcodes.get_opcode_repr(opcode, is_cbprefix),
+        //     op_address
+        // );
 
         // Match an opcode and manipulate memory accordingly.
         if !is_cbprefix {
@@ -78,6 +80,8 @@ impl CPU {
                     mmu.set_de(d16);
                 }
                 0x13 => mmu.set_de(de.wrapping_add(1)),
+                0x15 => mmu.d = alu_dec(mmu, d),
+                0x16 => mmu.d = mmu.get_next_byte(),
                 0x17 => {
                     // RLA is same as RL A but Z flag is unset.
                     mmu.a = alu_rl(mmu, a);
@@ -88,6 +92,7 @@ impl CPU {
                     mmu.pc = mmu.pc.wrapping_add(r8 as u16);
                 }
                 0x1A => mmu.a = mmu.rb(de),
+                0x1D => mmu.e = alu_dec(mmu, e),
                 0x1E => mmu.e = mmu.get_next_byte(),
                 0x20 => {
                     // Need to get byte to inc PC either way.
@@ -107,6 +112,7 @@ impl CPU {
                     mmu.set_hl(new_hl);
                 }
                 0x23 => mmu.set_hl(hl.wrapping_add(1)),
+                0x24 => mmu.h = alu_inc(mmu, h),
                 0x28 => {
                     let r8 = mmu.get_signed_byte() as u16;
                     if mmu.flag_z() {
@@ -132,8 +138,13 @@ impl CPU {
                 0x77 => mmu.wb(hl, a),
                 0x7B => mmu.a = e,
                 0x7C => mmu.a = h,
+                0x90 => alu_sub(mmu, b),
                 0x9F => alu_sbc(mmu, a),
                 0xAF => alu_xor(mmu, a),
+                0xBE => {
+                    let value = mmu.rb(hl);
+                    alu_cp(mmu, value);
+                }
                 0xC1 => {
                     let address = mmu.pop_stack();
                     mmu.set_bc(address);

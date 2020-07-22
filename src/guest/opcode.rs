@@ -157,6 +157,6 @@ mod tests {
         let opcodes = OpCodes::from_path("data/opcodes.json").unwrap();
 
         let cycles = opcodes.get_cycles(0x00, false, false);
-        assert_eq!(cycles, 1);
+        assert_eq!(cycles, 4);
     }
 }

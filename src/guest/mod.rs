@@ -1,9 +1,9 @@
 mod alu;
 mod cpu;
-mod gpu;
 mod mmu;
 mod opcode;
+mod ppu;
 
 pub use cpu::CPU;
-pub use gpu::GPU;
 pub use mmu::MMU;
+pub use ppu::PPU;

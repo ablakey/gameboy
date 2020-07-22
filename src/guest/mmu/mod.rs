@@ -5,6 +5,7 @@ mod reg;
 use bootloader::BootLoader;
 use cartridge::Cartridge;
 use hwreg::HardwareRegisters;
+use log::info;
 
 /// Memory map addresses
 const HRAM_TOP: u16 = 0xFFFE;
@@ -24,7 +25,7 @@ pub struct MMU {
     sram: [u8; 0x2000], // 8KB (no GBC banking support).
     vram: [u8; 0x2000], // 8KB graphics RAM.
     boot: BootLoader,
-    hwreg: HardwareRegisters,
+    pub hwreg: HardwareRegisters,
     cart: Cartridge,
     pub pc: u16,
     pub sp: u16,
@@ -106,6 +107,7 @@ impl MMU {
     /// Get the next byte and advance the program counter by 1.
     pub fn get_next_byte(&mut self) -> u8 {
         let byte = self.rb(self.pc);
+        info!("{:#04x}", byte);
         self.pc += 1;
         byte
     }
@@ -118,6 +120,7 @@ impl MMU {
     /// Get the next word in memory and advance the program counter by 2.
     pub fn get_next_word(&mut self) -> u16 {
         let word = self.rw(self.pc);
+        info!("{:#06x}", word);
         self.pc += 2;
         word
     }
@@ -137,7 +140,7 @@ impl MMU {
         address
     }
 
-    pub fn oam_dma(&mut self, address: u16) {
+    pub fn oam_dma(&mut self, _address: u16) {
         // TODO: write 160 bytes from address -> OAM RAM.
         // Assert that address is a multiple of 0x100  address % 0x100 == 0
         // Write tests that set up some memory to be copied, performs a copy, and checks that it was
