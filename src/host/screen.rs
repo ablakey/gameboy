@@ -32,7 +32,7 @@ impl Screen {
         })
     }
 
-    /// Iterate through all pixels in buffer and draw only those that are set active.
+    /// Iterate through all pixels in buffer and draw only those that are set active (b&w).
     /// The screen is first blanked, then all pixels in buffer are evaluated for being active.
     /// The remaining pixels are drawn as filled rects, scaled by scale_factor.
     pub fn draw(&mut self, &buffer: &[u8; Self::DMG_WIDTH * Self::DMG_HEIGHT]) {

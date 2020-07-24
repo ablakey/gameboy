@@ -3,7 +3,6 @@ pub struct PPU {
     pub image_buffer: [u8; 160 * 144],
 }
 use super::mmu::{MMU, TILEMAP_0_BOT, TILEMAP_1_BOT};
-use log::info;
 
 impl PPU {
     pub fn new() -> Self {
@@ -61,7 +60,7 @@ impl PPU {
         if mode == 1 && self.modeclock >= 456 {
             self.modeclock -= 456;
 
-            if mmu.hwreg.line == 152 {
+            if mmu.hwreg.line == 153 {
                 mmu.hwreg.mode = 2;
                 mmu.hwreg.line = 0;
             } else {
@@ -81,42 +80,40 @@ impl PPU {
             TILEMAP_0_BOT
         };
 
-        // The fixed line we're drawing onto (0-143)
-        let scy = mmu.hwreg.scy;
-        let scx = 0u8; // This should be a hwreg eventually. Not used in the vertical scroll intro.
+        let scy = mmu.hwreg.scy; // Scroll-y offset.
+        let scx = 0u8; // TODO: This should be a hwreg. Not used in the vertical scroll intro.
 
-        // We want to iterate through 160 pixels to draw a line.
-        for x in 0..160 {
-            // What is the pixel address in terms of 256x256 grid?
-            // For example, if we're drawing pixel 15 of 256 in a line, we want to draw pixel 8 of
-            // the second tile. We modulo by 256 because if we exceed 255, we want to roll over
-            // back to the other side (left/right, top/bottom) of the screen and draw more.
-            let index_x = (x + scx) % 255; // Which pixel from 0-255 to draw.
-            let tile_col_num = index_x / 8; // Which tile in the correct tilemap line
+        // We want to iterate through 160 pixels to draw one scanline.
+        for x in 0..160u8 {
+            let index_x = x.wrapping_add(scx); // Pixel's x in 256x256 scene with wraparound.
+            let tile_col_num = index_x / 8; // 32x32 tile x coord.
 
-            let index_y = (line + scy) % 255;
-            let tile_row_num = index_y / 8;
+            let index_y = line.wrapping_add(scy); // Pixel's y in 256x256 scene with wraparound.
+            let tile_row_num = index_y / 8; // 32x32 tile y coord.
+
+            // At this point we have which tile in the 32x32 tilemap the pixel we want to draw
+            // TODO: more exposition.
 
             // Get what pixel in this 8*8 tile we're drawing.
             let pixel_row_num = index_x % 8; // Which bit in the tile byte is this pixel?
             let pixel_col_num = index_y % 8;
 
-            // In a row-major index of a 32x32 grid.
-            println!("{} {}", tile_row_num, tile_col_num);
-
-            // Thre are 256 tiles numbered 0-255.
-            let tile_num = tile_row_num * 32 + tile_col_num;
-            let tile_address = tilemap_address + tile_num as u16; // First pixel in tile.
+            // Thre are 1024 tiles numbered 0-1023.
+            let tile_num = tile_row_num as u16 * 32 + tile_col_num as u16;
+            let tile_address = tilemap_address + tile_num; // First pixel in tile.
 
             // Multiply by 2 because each row is two bytes.
             let tile_row_index = tile_address + (pixel_row_num as u16 * 2);
             let tile_data_0 = mmu.rb(tile_row_index);
             let tile_data_1 = mmu.rb(tile_row_index + 1);
 
-            // TODO: get the actual pixel value.
-            let pixel_value = (tile_data_0 >> 7) & 0x1;
+            // Get pixel bits.
+            let p0 = (tile_data_0 >> (7 - pixel_col_num)) & 0x1;
+            let p1 = (tile_data_1 >> (7 - pixel_col_num)) & 0x1;
 
-            self.image_buffer[line as usize * 160 + x as usize] = pixel_value;
+            let pvalue = p0 << 1 + p1;
+
+            self.image_buffer[line as usize * 160 + x as usize] = pvalue;
         }
     }
 }
