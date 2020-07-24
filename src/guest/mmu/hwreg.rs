@@ -19,14 +19,14 @@ pub struct HardwareRegisters {
 
     // LCDC (0xFF40)
     // Note that tile map 0x8800-0x97FF are unsigned, 0x9C00-0x9FFF are signed.
-    lcd_on: bool,          // Draw picture?
-    window_tilemap: bool,  // 0: 0x9800-0x9BFF, 1: 0x9C00-0x9FFF
-    window_on: bool,       // "Window" off or on.
-    tile_data_table: bool, // 0: 0x8800-0x97FF 1: 0x8000-0x8FFF <- 1 is same area as OBJ (Sprites?)
-    pub bg_tilemap: bool,  // 0: 0x9800-0x9BFF, 1: 0x9C00-0x9FFF
-    sprite_size: bool,     // 0: 8x8, 1: 8x16
-    sprite_on: bool,       // Draw sprites?
-    window_bg_on: bool,    // Draw Window and Background?
+    lcd_on: bool,              // Draw picture?
+    window_tilemap: bool,      // 0: 0x9800-0x9BFF, 1: 0x9C00-0x9FFF
+    window_on: bool,           // "Window" off or on.
+    pub tile_data_table: bool, // 0: 0x8800-0x97FF 1: 0x8000-0x8FFF <- 1 is same area as OBJ (Sprites?)
+    pub bg_tilemap: bool,      // 0: 0x9800-0x9BFF, 1: 0x9C00-0x9FFF
+    sprite_size: bool,         // 0: 8x8, 1: 8x16
+    sprite_on: bool,           // Draw sprites?
+    window_bg_on: bool,        // Draw Window and Background?
 }
 
 impl HardwareRegisters {

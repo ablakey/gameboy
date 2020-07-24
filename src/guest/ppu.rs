@@ -2,7 +2,7 @@ pub struct PPU {
     modeclock: usize, // Current clock step representing where the PPU is in its processing cycle.
     pub image_buffer: [u8; 160 * 144],
 }
-use super::mmu::{MMU, TILEMAP_0_BOT, TILEMAP_1_BOT};
+use super::mmu::{MMU, TILEDATA_0, TILEDATA_1, TILEMAP_0, TILEMAP_1};
 
 impl PPU {
     pub fn new() -> Self {
@@ -75,9 +75,15 @@ impl PPU {
 
         // Which of the two tilemaps are we utilizing?
         let tilemap_address = if mmu.hwreg.bg_tilemap {
-            TILEMAP_1_BOT
+            TILEMAP_1
         } else {
-            TILEMAP_0_BOT
+            TILEMAP_0
+        };
+
+        let tiledata_address = if mmu.hwreg.tile_data_table {
+            TILEDATA_0
+        } else {
+            TILEDATA_1
         };
 
         let scy = mmu.hwreg.scy; // Scroll-y offset.
@@ -100,18 +106,18 @@ impl PPU {
 
             // Thre are 1024 tiles numbered 0-1023.
             let tile_num = tile_row_num as u16 * 32 + tile_col_num as u16;
-            let tile_address = tilemap_address + tile_num; // First pixel in tile.
+            let tile_address = tiledata_address + tile_num; // First pixel in tile.
 
             // Multiply by 2 because each row is two bytes.
             let tile_row_index = tile_address + (pixel_row_num as u16 * 2);
-            let tile_data_0 = mmu.rb(tile_row_index);
-            let tile_data_1 = mmu.rb(tile_row_index + 1);
+            let tile_data_low = mmu.rb(tile_row_index);
+            let tile_data_high = mmu.rb(tile_row_index + 1);
 
             // Get pixel bits.
-            let p0 = (tile_data_0 >> (7 - pixel_col_num)) & 0x1;
-            let p1 = (tile_data_1 >> (7 - pixel_col_num)) & 0x1;
+            let p0 = (tile_data_low >> pixel_col_num) & 0x1;
+            let p1 = (tile_data_high >> pixel_col_num) & 0x1;
 
-            let pvalue = p0 << 1 + p1;
+            let pvalue = p1 << 1 + p0;
 
             self.image_buffer[line as usize * 160 + x as usize] = pvalue;
         }

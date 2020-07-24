@@ -19,11 +19,11 @@ const VRAM_BOT: u16 = 0x8000;
 const CART_ROM_TOP: u16 = 0x7FFF; // Range includes parts of cartridge like interrupt vectors.
 const CART_ROM_BOT: u16 = 0x0000;
 
-const TILEMAP_1_TOP: u16 = 0x9FFF;
-pub const TILEMAP_1_BOT: u16 = 0x9C00;
+pub const TILEMAP_1: u16 = 0x9C00;
+pub const TILEMAP_0: u16 = 0x9800;
 
-const TILEMAP_0_TOP: u16 = 0x9BFF;
-pub const TILEMAP_0_BOT: u16 = 0x9800;
+pub const TILEDATA_0: u16 = 0x8000;
+pub const TILEDATA_1: u16 = 0x8800;
 
 // TODO explain (that MMU has memory, registers, io regsiters (TBD) and other state)
 pub struct MMU {
