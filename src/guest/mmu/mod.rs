@@ -22,8 +22,8 @@ const CART_ROM_BOT: u16 = 0x0000;
 pub const TILEMAP_1: u16 = 0x9C00;
 pub const TILEMAP_0: u16 = 0x9800;
 
-pub const TILEDATA_0: u16 = 0x8000;
 pub const TILEDATA_1: u16 = 0x8800;
+pub const TILEDATA_0: u16 = 0x8000;
 
 // TODO explain (that MMU has memory, registers, io regsiters (TBD) and other state)
 pub struct MMU {

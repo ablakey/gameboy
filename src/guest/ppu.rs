@@ -106,7 +106,14 @@ impl PPU {
 
             // Thre are 1024 tiles numbered 0-1023.
             let tile_num = tile_row_num as u16 * 32 + tile_col_num as u16;
-            let tile_address = tiledata_address + tile_num; // First pixel in tile.
+
+            let tile_address_offset = mmu.rb(tilemap_address + tile_num) as u16;
+
+            let tile_address = tiledata_address + (tile_address_offset * 16); // First pixel in tile
+
+            if tile_address as u16 == 0x8190 {
+                print!("here");
+            }
 
             // Multiply by 2 because each row is two bytes.
             let tile_row_index = tile_address + (pixel_row_num as u16 * 2);
