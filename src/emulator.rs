@@ -52,6 +52,7 @@ impl Emulator {
     }
 
     /// Loop at max-speed to process an entire frame.
+    /// TODO: this is a hot loop and unnecessarily eats up a lot of CPU time.
     fn emulate_frame(&mut self) {
         let mut cycle_count: usize = 0;
         'frame: loop {
@@ -67,6 +68,6 @@ impl Emulator {
         }
 
         // Draw the frame.
-        self.screen.draw(&self.ppu.image_buffer);
+        self.screen.update(&self.ppu.image_buffer);
     }
 }
