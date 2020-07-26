@@ -18,9 +18,9 @@ impl CPU {
     /// given every address put on the stack is a word in length.
     ///
     /// Program Counter:
-    /// Begins at 0x0 and runs through the bootloader. Once the bootloader is complete, it should
-    /// be at 0x100. Some emulators ignore the bootloader, pre-initialize the emulator, and begin
-    /// at 0x100. We don't take that shortcut, as running the bootloader is a great test.
+    /// Begins at 0x0 and runs through the bootrom. Once the bootrom is complete, it should
+    /// be at 0x100. Some emulators ignore the bootrom, pre-initialize the emulator, and begin
+    /// at 0x100. We don't take that shortcut, as running the bootrom is a great test.
     pub fn new() -> Self {
         Self {
             opcodes: OpCodes::from_path("data/opcodes.json").unwrap(),
@@ -53,22 +53,24 @@ impl CPU {
         // The PC, for example, might be incremented in an operation, and then read from. Therefore
         // getting the value of PC now would be a problem.
         let MMU {
-            a, b, c, d, e, h, ..
+            a,
+            b,
+            c,
+            d,
+            e,
+            h,
+            l,
+            ..
         } = *mmu;
 
         let bc = mmu.bc();
         let de = mmu.de();
         let hl = mmu.hl();
 
-        // println!(
-        //     "{} {:#x}",
-        //     self.opcodes.get_opcode_repr(opcode, is_cbprefix),
-        //     op_address
-        // );
-
         // Match an opcode and manipulate memory accordingly.
         if !is_cbprefix {
             match opcode {
+                0x00 => (), // NOP
                 0x04 => mmu.b = alu_inc(mmu, b),
                 0x05 => mmu.b = alu_dec(mmu, b),
                 0x06 => mmu.b = mmu.get_next_byte(),
@@ -136,8 +138,14 @@ impl CPU {
                 0x57 => mmu.d = a,
                 0x67 => mmu.h = a,
                 0x77 => mmu.wb(hl, a),
+                0x78 => mmu.a = b,
                 0x7B => mmu.a = e,
                 0x7C => mmu.a = h,
+                0x7D => mmu.a = l,
+                0x86 => {
+                    let value = mmu.rb(mmu.hl());
+                    alu_add(mmu, value);
+                }
                 0x90 => alu_sub(mmu, b),
                 0x9F => alu_sbc(mmu, a),
                 0xAF => alu_xor(mmu, a),

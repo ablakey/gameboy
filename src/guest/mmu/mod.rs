@@ -1,8 +1,8 @@
-mod bootloader;
+mod bootrom;
 mod cartridge;
 mod hwreg;
 mod reg;
-use bootloader::BootLoader;
+use bootrom::BootRom;
 use cartridge::Cartridge;
 use hwreg::HardwareRegisters;
 use log::info;
@@ -30,9 +30,9 @@ pub struct MMU {
     hram: [u8; 0x7F],   // 127 bytes of "High RAM" (DMA accessible) aka Zero page.
     sram: [u8; 0x2000], // 8KB (no GBC banking support).
     vram: [u8; 0x2000], // 8KB graphics RAM.
-    boot: BootLoader,
+    bootrom: BootRom,
     pub hwreg: HardwareRegisters,
-    cart: Cartridge,
+    cartridge: Cartridge,
     pub pc: u16,
     pub sp: u16,
     pub a: u8,
@@ -53,9 +53,9 @@ impl MMU {
             hram: [0; 0x7F],
             sram: [0; 0x2000],
             vram: [0; 0x2000],
-            boot: BootLoader::new(),
+            bootrom: BootRom::new(),
             hwreg: HardwareRegisters::new(),
-            cart: Cartridge::new(cartridge_path),
+            cartridge: Cartridge::new(cartridge_path),
             pc: 0,
             sp: 0, // Initialized by the software.
             a: 0,
@@ -73,12 +73,18 @@ impl MMU {
     pub fn rb(&self, address: u16) -> u8 {
         match address {
             0xFF46 => panic!("0xff46: OAM DMA cannot be read from."),
-            0x00..=0xFF => self.boot.rb(address), // When bootloader is done, need to remap.
+            0x00..=0xFF => {
+                if self.hwreg.bootrom_enabled {
+                    self.bootrom.rb(address)
+                } else {
+                    self.cartridge.rb(address)
+                }
+            }
             HWREG_BOT..=HWREG_TOP => self.hwreg.get(address), // Some are not readable.
             HRAM_BOT..=HRAM_TOP => self.hram[(address - HRAM_BOT) as usize],
             SRAM_BOT..=SRAM_TOP => self.sram[(address - SRAM_BOT) as usize],
             VRAM_BOT..=VRAM_TOP => self.vram[(address - VRAM_BOT) as usize],
-            CART_ROM_BOT..=CART_ROM_TOP => self.cart.rb(address),
+            CART_ROM_BOT..=CART_ROM_TOP => self.cartridge.rb(address),
             _ => panic!("Tried to read from {:#x} which is not mapped.", address),
         }
     }

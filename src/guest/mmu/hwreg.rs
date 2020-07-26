@@ -1,6 +1,9 @@
 /// TODO: explain that the public structs are the interface for the hardware to manipulate
 /// the registers.  The MMU should only talk to the registers through get/set.
 pub struct HardwareRegisters {
+    // General Hardware Registers
+    pub bootrom_enabled: bool,
+
     // APU Registers
     nr11: u8, // Sound mode 1 length/wave.
     nr12: u8, // Sound mode 1 envelope.
@@ -13,14 +16,14 @@ pub struct HardwareRegisters {
     // PPU Registers
     pub scx: u8,  // scroll X background.
     pub scy: u8,  // scroll Y background.
-    bgp: u8,      // background & window palette details.
+    pub bgp: u8,  // background & window palette details.
     pub line: u8, // vertical line data is transferred to. 0-153, 144-153 are during vblank.
     pub lyc: u8,
     pub mode: u8,
 
     // LCDC (0xFF40)
     // Note that tile map 0x8800-0x97FF are unsigned, 0x9C00-0x9FFF are signed.
-    lcd_on: bool,              // Draw picture?
+    pub lcd_on: bool,          // Draw picture?
     window_tilemap: bool,      // 0: 0x9800-0x9BFF, 1: 0x9C00-0x9FFF
     window_on: bool,           // "Window" off or on.
     pub tile_data_table: bool, // 0: 0x8800-0x97FF 1: 0x8000-0x8FFF <- 1 is same area as OBJ (Sprites?)
@@ -33,6 +36,7 @@ pub struct HardwareRegisters {
 impl HardwareRegisters {
     pub fn new() -> Self {
         Self {
+            bootrom_enabled: true, // Starts as enabled.
             bgp: 0,
             line: 0,
             lyc: 0,
@@ -80,6 +84,7 @@ impl HardwareRegisters {
             0xFF42 => self.scy = value,
             0xFF44 => panic!("Cannot set hwreg.line"),
             0xFF47 => self.bgp = value,
+            0xFF50 => self.bootrom_enabled = false,
             _ => panic!(
                 "Tried to set a hardware register with invalid address {:x}",
                 address

@@ -69,8 +69,16 @@ impl PPU {
         }
     }
 
-    /// Draw a single scanline by iterating through a line of pixels and getting pixel data.
     fn draw_scanline(&mut self, mmu: &MMU) {
+        if !mmu.hwreg.lcd_on {
+            return;
+        }
+
+        self.draw_background_scanline(mmu);
+    }
+
+    /// Draw a single scanline by iterating through a line of pixels and getting pixel data.
+    fn draw_background_scanline(&mut self, mmu: &MMU) {
         let line = mmu.hwreg.line;
 
         // Use the LCDC hardware register to determine which of the two tilemap spaces we are
@@ -137,13 +145,15 @@ impl PPU {
             let p1 = (tile_data_upper >> (7 - pixel_col_num)) & 0x1;
             let pixel_value = (p1 << 1) + p0;
 
+            // Get the palette value for this pixel value.
+            // Multiply by 2 because hwreg.bgp is 4  2-bit values. To get the color_value for pixel
+            // 00 -> 00,   01 -> 02,  02 -> 04,  03 -> 06.  Mask by 0b11 because the color value is
+            // two bits.
+            let color_value = (mmu.hwreg.bgp >> (pixel_value * 2)) & 0x3;
+
             // Update the image buffer with this pixel value. Given a well-behaved main loop should
             // iterate through every pixel, there is no need to clear the previous buffer data.
-            self.image_buffer[line as usize * 160 + x as usize] = pixel_value;
-
-            if tile_row_index == 0x8190 {
-                print!("");
-            }
+            self.image_buffer[line as usize * 160 + x as usize] = color_value;
         }
     }
 }

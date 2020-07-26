@@ -48,6 +48,20 @@ pub fn alu_bit(m: &mut MMU, bit_index: u8, value: u8) {
     m.set_flag_h(true);
 }
 
+/// Add value to A.
+/// See alu_sub to better understand things about half-carry and half-borrow, etc.
+/// Carry is calculated by expanding the upper bounds and seeing if the result sum is > 255.
+/// Half-carry is calculated by isolating the lower nibble and seeing if the sum exceeds 15.
+/// Flags: [Z 0 H C]
+pub fn alu_add(m: &mut MMU, value: u8) {
+    let new_a = m.a.wrapping_add(value);
+    m.set_flag_z(new_a == 0);
+    m.set_flag_n(false);
+    m.set_flag_h((m.a & 0xF) + (value & 0xF) > 0xF);
+    m.set_flag_c(m.a as u16 + value as u16 > 0xFF);
+    m.a = new_a;
+}
+
 /// Subtract value from A.
 /// H is set if a half borrow occurs. This is calculated by isolating just the bottom nibble
 /// and calculating a full borrow of that. This is done by seeing if the operand is greater than
@@ -199,5 +213,23 @@ mod tests {
         // MSB becomes carry (c=true), LSB is 0 (carry was false). Shift left.
         assert_eq!(result, 0b00000010);
         assert_flags!(mmu, false, false, false, true);
+    }
+
+    #[test]
+    fn test_alu_add() {
+        let mmu = &mut MMU::new(None);
+        mmu.a = 0xFF;
+        alu_add(mmu, 0xFF);
+        assert_eq!(mmu.a, 0xFE);
+        assert_flags!(mmu, false, false, true, true);
+    }
+
+    #[test]
+    fn test_alu_add_no_carry() {
+        let mmu = &mut MMU::new(None);
+        mmu.a = 0x00;
+        alu_add(mmu, 0xE);
+        assert_eq!(mmu.a, 0xE);
+        assert_flags!(mmu, false, false, false, false);
     }
 }

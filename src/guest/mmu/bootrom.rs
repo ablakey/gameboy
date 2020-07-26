@@ -4,14 +4,14 @@ use std::io::prelude::*;
 
 const BOOT_ROM_PATH: &'static str = "data/dmg_rom.bin";
 
-pub struct BootLoader {
+pub struct BootRom {
     data: [u8; 0x100],
     pub is_active: bool,
 }
 
-impl BootLoader {
+impl BootRom {
     pub fn new() -> Self {
-        let data = BootLoader::load_boot_rom().unwrap();
+        let data = Self::load_boot_rom().unwrap();
         Self {
             data,
             is_active: true,
