@@ -50,7 +50,7 @@ mod tests {
     /// to test one of them.
     #[test]
     fn test_af() {
-        let mut mmu = MMU::new();
+        let mut mmu = MMU::new(None);
         mmu.a = 0xFF;
         mmu.f = 0x11;
         assert_eq!(mmu.af(), 0xFF11)
@@ -60,7 +60,7 @@ mod tests {
     /// to test one of them.
     #[test]
     fn test_set_af() {
-        let mut mmu = MMU::new();
+        let mut mmu = MMU::new(None);
         mmu.set_af(0xFF11);
         assert_eq!(mmu.a, 0xFF);
         assert_eq!(mmu.f, 0x11);
@@ -68,7 +68,7 @@ mod tests {
 
     #[test]
     fn test_get_flags() {
-        let mmu = &mut MMU::new();
+        let mmu = &mut MMU::new(None);
         mmu.f = 0b10100000;
         assert_eq!(mmu.flag_z(), true);
         assert_eq!(mmu.flag_h(), true);
@@ -76,7 +76,7 @@ mod tests {
 
     #[test]
     fn test_set_flags() {
-        let mut mmu = MMU::new();
+        let mut mmu = MMU::new(None);
         mmu.set_flag_z(true);
         mmu.set_flag_n(true);
         mmu.set_flag_h(true);

@@ -69,7 +69,3 @@ Not yet sure how to do interrupts. I think my main loop will just want to `unit.
 
 ### All state being in MMU
 In terms of how the DMG-01 is actually laid out, I'm going to bet the MMU does not actually posess all state.  That is, there's probably registers all over.  But rather than letting registers live with the CPU, I/O devices, etc. I will just make them members of the MMU structure. This makes it simple to look at state of the emulated machine and simplifies the story for save/load state as well.
-
-
-## TODO:
-- don't forget about div counter and timer counter.

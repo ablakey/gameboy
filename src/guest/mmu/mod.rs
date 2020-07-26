@@ -48,14 +48,14 @@ pub struct MMU {
 // TODO explain
 impl MMU {
     /// Initialize the MMU by loading the boot_rom into the first 256 addressable bytes.
-    pub fn new() -> Self {
+    pub fn new(cartridge_path: Option<&String>) -> Self {
         Self {
             hram: [0; 0x7F],
             sram: [0; 0x2000],
             vram: [0; 0x2000],
             boot: BootLoader::new(),
             hwreg: HardwareRegisters::new(),
-            cart: Cartridge::new(),
+            cart: Cartridge::new(cartridge_path),
             pc: 0,
             sp: 0, // Initialized by the software.
             a: 0,
@@ -160,7 +160,7 @@ mod tests {
 
     #[test]
     fn test_rw() {
-        let mut mmu = MMU::new();
+        let mut mmu = MMU::new(None);
         mmu.sram[0] = 0xFF;
         mmu.sram[1] = 0x11;
         let word = mmu.rw(0xC000);
@@ -169,7 +169,7 @@ mod tests {
 
     #[test]
     fn test_ww() {
-        let mut mmu = MMU::new();
+        let mut mmu = MMU::new(None);
         mmu.ww(0xC000, 0xFF11);
         assert_eq!(mmu.sram[0], 0x11);
         assert_eq!(mmu.sram[1], 0xFF);
@@ -177,7 +177,7 @@ mod tests {
 
     #[test]
     fn test_push_stack() {
-        let mut mmu = MMU::new();
+        let mut mmu = MMU::new(None);
         mmu.sp = 0xDFFF;
         mmu.push_stack(0x11FF);
         mmu.push_stack(0x22DD);
@@ -190,7 +190,7 @@ mod tests {
 
     #[test]
     fn test_pop_stack() {
-        let mut mmu = MMU::new();
+        let mut mmu = MMU::new(None);
         mmu.sp = 0xfffe; // A common place to put the stack.
         mmu.push_stack(0x11FF);
         assert_eq!(mmu.sp, 0xfffc); // Stack Pointer has been decremented to the next address slot.

@@ -110,7 +110,7 @@ mod tests {
 
     #[test]
     fn test_alu_inc() {
-        let mmu = &mut MMU::new();
+        let mmu = &mut MMU::new(None);
         mmu.a = 0xFF;
         mmu.a = alu_inc(mmu, mmu.a);
         assert_eq!(mmu.a, 0x0);
@@ -119,7 +119,7 @@ mod tests {
 
     #[test]
     fn test_alu_dec() {
-        let mmu = &mut MMU::new();
+        let mmu = &mut MMU::new(None);
         mmu.a = 0x10; // There will be a half-borrow.
         mmu.a = alu_dec(mmu, mmu.a);
         assert_eq!(mmu.a, 0x0F);
@@ -128,7 +128,7 @@ mod tests {
 
     #[test]
     fn test_alu_xor() {
-        let mmu = &mut MMU::new();
+        let mmu = &mut MMU::new(None);
         alu_xor(mmu, 0x11);
         assert_eq!(mmu.a, 0x11);
         assert_eq!(mmu.flag_z(), false);
@@ -145,7 +145,7 @@ mod tests {
 
     #[test]
     fn test_alu_bit() {
-        let mmu = &mut MMU::new();
+        let mmu = &mut MMU::new(None);
         mmu.a = 0b00001000;
         alu_bit(mmu, 3, mmu.a);
         assert_flags!(mmu, false, false, true, false);
@@ -157,7 +157,7 @@ mod tests {
 
     #[test]
     fn test_alu_sub() {
-        let mmu = &mut MMU::new();
+        let mmu = &mut MMU::new(None);
         mmu.a = 0x10;
         alu_sub(mmu, 0xFF);
         assert_eq!(mmu.a, 0x11);
@@ -166,7 +166,7 @@ mod tests {
 
     #[test]
     fn test_alu_sub_no_borrows() {
-        let mmu = &mut MMU::new();
+        let mmu = &mut MMU::new(None);
         mmu.a = 0xFF;
         alu_sub(mmu, 0xFF);
         assert_eq!(mmu.a, 0x00);
@@ -175,7 +175,7 @@ mod tests {
 
     #[test]
     fn test_alu_cp() {
-        let mmu = &mut MMU::new();
+        let mmu = &mut MMU::new(None);
         mmu.a = 0x10;
         alu_cp(mmu, 0xFF);
         assert_eq!(mmu.a, 0x10); // Does not get changed.
@@ -184,7 +184,7 @@ mod tests {
 
     #[test]
     fn test_alu_cp_no_borrows() {
-        let mmu = &mut MMU::new();
+        let mmu = &mut MMU::new(None);
         mmu.a = 0xFF;
         alu_cp(mmu, 0xFF);
         assert_eq!(mmu.a, 0xFF);
@@ -193,7 +193,7 @@ mod tests {
 
     #[test]
     fn test_alu_rl() {
-        let mmu = &mut MMU::new();
+        let mmu = &mut MMU::new(None);
         let result = alu_rl(mmu, 0b10000001);
 
         // MSB becomes carry (c=true), LSB is 0 (carry was false). Shift left.

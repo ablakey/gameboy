@@ -11,6 +11,7 @@ pub struct HardwareRegisters {
     nr52: u8, // Power to sound.
 
     // PPU Registers
+    pub scx: u8,  // scroll X background.
     pub scy: u8,  // scroll Y background.
     bgp: u8,      // background & window palette details.
     pub line: u8, // vertical line data is transferred to. 0-153, 144-153 are during vblank.
@@ -42,6 +43,7 @@ impl HardwareRegisters {
             nr50: 0,
             nr51: 0,
             nr52: 0,
+            scx: 0,
             scy: 0,
             mode: 0,
             lcd_on: false,

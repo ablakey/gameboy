@@ -14,14 +14,14 @@ pub struct Emulator {
 }
 
 impl Emulator {
-    pub fn new() -> Result<Self, String> {
+    pub fn new(cartridge_path: Option<&String>) -> Result<Self, String> {
         // SDL-based host: graphics, sound, audio.
         let sdl_context = sdl2::init()?;
         let input = Input::new(&sdl_context)?;
         let screen = Screen::new(&sdl_context, 4)?;
         Ok(Self {
             cpu: CPU::new(),
-            mmu: MMU::new(),
+            mmu: MMU::new(cartridge_path),
             ppu: PPU::new(),
             input,
             is_paused: false,
