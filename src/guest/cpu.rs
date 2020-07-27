@@ -2,7 +2,6 @@ use super::opcode::OpCodes;
 
 use super::alu::*;
 use super::MMU;
-use log::error;
 pub struct CPU {
     opcodes: OpCodes,
 }
@@ -110,8 +109,7 @@ impl CPU {
                 }
                 0x22 => {
                     mmu.wb(hl, a);
-                    let new_hl = hl.wrapping_add(1);
-                    mmu.set_hl(new_hl);
+                    mmu.set_hl(hl.wrapping_add(1));
                 }
                 0x23 => mmu.set_hl(hl.wrapping_add(1)),
                 0x24 => mmu.h = alu_inc(mmu, h),
@@ -121,6 +119,10 @@ impl CPU {
                         mmu.pc = mmu.pc.wrapping_add(r8 as u16);
                         condition_met = true;
                     }
+                }
+                0x2A => {
+                    mmu.a = mmu.rb(hl);
+                    mmu.set_hl(hl.wrapping_add(1));
                 }
                 0x2E => mmu.l = mmu.get_next_byte(),
                 0x31 => {
@@ -182,13 +184,13 @@ impl CPU {
                     let d8 = mmu.get_next_byte();
                     alu_cp(mmu, d8)
                 }
-                _ => self.panic_opcode(opcode, is_cbprefix, op_address),
+                _ => self.panic_opcode(opcode, is_cbprefix, op_address, mmu),
             }
         } else {
             match opcode {
                 0x7C => alu_bit(mmu, 7, h),
                 0x11 => mmu.c = alu_rl(mmu, c),
-                _ => self.panic_opcode(opcode, is_cbprefix, op_address),
+                _ => self.panic_opcode(opcode, is_cbprefix, op_address, mmu),
             }
         }
 
@@ -202,13 +204,13 @@ impl CPU {
     }
 
     /// Debug function. Panic when an opcode is not handled.
-    fn panic_opcode(&self, opcode: u8, is_cbprefix: bool, operation_address: u16) {
+    fn panic_opcode(&self, opcode: u8, is_cbprefix: bool, operation_address: u16, mmu: &MMU) {
         let msg = format!(
             "{} {:#06x}",
             self.opcodes.get_opcode_repr(opcode, is_cbprefix),
             operation_address
         );
-        error!("{}", msg);
-        panic!("{}", msg);
+
+        mmu.dump(msg);
     }
 }

@@ -2,7 +2,6 @@ mod emulator;
 mod guest;
 mod host;
 use emulator::Emulator;
-// use host::init_debugger;
 use std::env;
 
 fn main() {
@@ -15,7 +14,6 @@ fn main() {
 
     let cartridge_path = &args[1];
 
-    // init_debugger();
     let emulator = Emulator::new(Some(cartridge_path));
     emulator.unwrap().run_forever();
 }

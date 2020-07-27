@@ -5,7 +5,6 @@ mod reg;
 use bootrom::BootRom;
 use cartridge::Cartridge;
 use hwreg::HardwareRegisters;
-use log::info;
 
 /// Memory map addresses
 const UNUSABLE_TOP: u16 = 0xFEFF; // Unusable memory. Writes do nothing, Reads return 0xFF.
@@ -78,7 +77,7 @@ impl MMU {
     /// Read a byte from address.
     pub fn rb(&self, address: u16) -> u8 {
         match address {
-            0xFF46 => self.crash(format!("0xff46: OAM DMA cannot be read from.")),
+            0xFF46 => self.dump(format!("0xff46: OAM DMA cannot be read from.")),
             0x00..=0xFF => {
                 if self.hwreg.bootrom_enabled {
                     self.bootrom.rb(address)
@@ -94,7 +93,7 @@ impl MMU {
             VRAM_BOT..=VRAM_TOP => self.vram[(address - VRAM_BOT) as usize],
             CART_ROM_BOT..=CART_ROM_TOP => self.cartridge.rb(address),
             _ => {
-                self.crash(format!(
+                self.dump(format!(
                     "Tried to read from {:#x} which is not mapped.",
                     address
                 ));
@@ -113,7 +112,7 @@ impl MMU {
             SRAM_BOT..=SRAM_TOP => self.sram[(address - SRAM_BOT) as usize] = value,
             VRAM_BOT..=VRAM_TOP => self.vram[(address - VRAM_BOT) as usize] = value,
             CART_ROM_BOT..=CART_ROM_TOP => self.cartridge.wb(address, value),
-            _ => self.crash(format!(
+            _ => self.dump(format!(
                 "Tried to write to {:#x} which is not mapped.",
                 address
             )),
@@ -138,7 +137,6 @@ impl MMU {
     /// Get the next byte and advance the program counter by 1.
     pub fn get_next_byte(&mut self) -> u8 {
         let byte = self.rb(self.pc);
-        info!("{:#04x}", byte);
         self.pc += 1;
         byte
     }
@@ -151,7 +149,6 @@ impl MMU {
     /// Get the next word in memory and advance the program counter by 2.
     pub fn get_next_word(&mut self) -> u16 {
         let word = self.rw(self.pc);
-        info!("{:#06x}", word);
         self.pc += 2;
         word
     }
@@ -180,7 +177,7 @@ impl MMU {
 
     /// Panic with a given message, but also printout some debug info.
     /// By making it a diverging function, we don't care about return type.
-    fn crash(&self, msg: String) -> ! {
+    pub fn dump(&self, msg: String) -> ! {
         println!("Debug Info");
         println!("PC: {:#06x}", self.pc);
         panic!("{}", msg);
