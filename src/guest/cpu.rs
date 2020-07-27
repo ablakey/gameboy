@@ -70,9 +70,14 @@ impl CPU {
         if !is_cbprefix {
             match opcode {
                 0x00 => (), // NOP
+                0x01 => {
+                    let d16 = mmu.get_next_word();
+                    mmu.set_bc(d16);
+                }
                 0x04 => mmu.b = alu_inc(mmu, b),
                 0x05 => mmu.b = alu_dec(mmu, b),
                 0x06 => mmu.b = mmu.get_next_byte(),
+                0x0B => mmu.set_bc(bc.wrapping_sub(1)),
                 0x0C => mmu.c += 1,
                 0x0D => mmu.c = alu_dec(mmu, c),
                 0x0E => mmu.c = mmu.get_next_byte(),
@@ -151,6 +156,7 @@ impl CPU {
                 0x90 => alu_sub(mmu, b),
                 0x9F => alu_sbc(mmu, a),
                 0xAF => alu_xor(mmu, a),
+                0xB1 => alu_or(mmu, c),
                 0xBE => {
                     let value = mmu.rb(hl);
                     alu_cp(mmu, value);
