@@ -21,6 +21,17 @@ impl Cartridge {
         self.data[address as usize]
     }
 
+    /// Write to ROM.  This isn't actually a write, but the attempt to write will control
+    /// on-cartridge ROM banking systems that will make a different bank of data available in the
+    // top 16KB of ROM addressable space.
+    pub fn wb(&self, address: u16, value: u8) {
+        // TODO: handle banking. For now we just swallow the writes.
+        println!(
+            "Tried to write to cartridge: {:#06x} {:#04x}",
+            address, value
+        )
+    }
+
     /// Load a cartridge into memory.
     /// TODO: support cartridges of different sizes using banking. It would return a vector.
     /// A banking mechanism (register based?) would decide which slice of that vector to expose.

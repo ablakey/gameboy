@@ -85,6 +85,7 @@ impl HardwareRegisters {
             0xFF44 => panic!("Cannot set hwreg.line"),
             0xFF47 => self.bgp = value,
             0xFF50 => self.bootrom_enabled = false,
+            0xFF7f => (), // tetris.gb off-by-one error.
             _ => panic!(
                 "Tried to set a hardware register with invalid address {:x}",
                 address

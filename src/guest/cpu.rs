@@ -157,6 +157,7 @@ impl CPU {
                     let address = mmu.pop_stack();
                     mmu.set_bc(address);
                 }
+                0xC3 => mmu.pc = mmu.pc.wrapping_add(mmu.get_next_word()),
                 0xC5 => mmu.push_stack(bc),
                 0xC9 => mmu.pc = mmu.pop_stack(),
                 0xCD => {
@@ -191,9 +192,10 @@ impl CPU {
             }
         }
 
-        // Change cycles to be the smaller value (action not taken).
+        // Change cycles to be the larger value as the action was taken, which is more expensive.
+        // Only some operations are branching conditions with differing cycle lengths.
         if condition_met {
-            cycles = self.opcodes.get_cycles(opcode, is_cbprefix, false);
+            cycles = self.opcodes.get_cycles(opcode, is_cbprefix, true);
         }
 
         cycles

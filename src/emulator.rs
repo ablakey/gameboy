@@ -1,7 +1,6 @@
 use super::guest::{CPU, MMU, PPU};
 use super::host::{Input, InputEvent, Screen};
 use sdl2;
-use std::time::{Duration, SystemTime};
 
 pub struct Emulator {
     cpu: CPU,
@@ -10,7 +9,6 @@ pub struct Emulator {
     input: Input,
     screen: Screen,
     is_paused: bool,
-    now: SystemTime,
 }
 
 impl Emulator {
@@ -26,16 +24,11 @@ impl Emulator {
             input,
             is_paused: false,
             screen,
-            now: SystemTime::now(),
         })
     }
 
     pub fn run_forever(&mut self) {
-        let mut last = self.now.elapsed().unwrap();
-
         'program: loop {
-            let current = self.now.elapsed().unwrap();
-
             // Handle program I/O (events that affect the emulator). This needs to be
             match self.input.get_event() {
                 InputEvent::Exit => break 'program,
@@ -43,16 +36,10 @@ impl Emulator {
                 _ => (),
             }
 
-            // If at least 16.67ms have passed since starting the last frame, process another frame.
-            if current - last >= Duration::from_micros(16_670) {
-                last = current;
-                self.emulate_frame();
-            }
+            self.emulate_frame();
         }
     }
 
-    /// Loop at max-speed to process an entire frame.
-    /// TODO: this is a hot loop and unnecessarily eats up a lot of CPU time.
     fn emulate_frame(&mut self) {
         let mut cycle_count: usize = 0;
         'frame: loop {
@@ -67,7 +54,13 @@ impl Emulator {
             }
         }
 
-        // Draw the frame.
+        // Draw the frame.  Note that vsync is enabled so this is ultimately what governs the
+        // rate of this emulator. The SDL drawing routine will block for the next frame. This also
+        // means that if the framerate goverened by v-sync isn't 60fps, this emulator won't work
+        // right. That's okay for my purposes. Check out some other emulators for other ways to
+        // handle this.  the rboy Rust emulator uses a thread to ping on a regular interval. The
+        // main loop can block on awaiting that ping. There's probably also a really smart way
+        // to handle it using async/await.
         self.screen.update(&self.ppu.image_buffer);
     }
 }

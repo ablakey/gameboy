@@ -8,10 +8,14 @@ use hwreg::HardwareRegisters;
 use log::info;
 
 /// Memory map addresses
+const UNUSABLE_TOP: u16 = 0xFEFF; // Unusable memory. Writes do nothing, Reads return 0xFF.
+const UNUSABLE_BOT: u16 = 0xFEA0;
 const HRAM_TOP: u16 = 0xFFFE;
 const HRAM_BOT: u16 = 0xFF80;
 const HWREG_TOP: u16 = 0xFF7F;
 const HWREG_BOT: u16 = 0xFF00;
+const OAM_TOP: u16 = 0xFE9F;
+const OAM_BOT: u16 = 0xFE00;
 const SRAM_TOP: u16 = 0xDFFF;
 const SRAM_BOT: u16 = 0xC000;
 const VRAM_TOP: u16 = 0x9FFF;
@@ -28,6 +32,7 @@ pub const TILEDATA_0: u16 = 0x8000;
 // TODO explain (that MMU has memory, registers, io regsiters (TBD) and other state)
 pub struct MMU {
     hram: [u8; 0x7F],   // 127 bytes of "High RAM" (DMA accessible) aka Zero page.
+    oam: [u8; 0xA0],    // 160 bytes of OAM RAM.
     sram: [u8; 0x2000], // 8KB (no GBC banking support).
     vram: [u8; 0x2000], // 8KB graphics RAM.
     bootrom: BootRom,
@@ -51,6 +56,7 @@ impl MMU {
     pub fn new(cartridge_path: Option<&String>) -> Self {
         Self {
             hram: [0; 0x7F],
+            oam: [0; 0xA0],
             sram: [0; 0x2000],
             vram: [0; 0x2000],
             bootrom: BootRom::new(),
@@ -72,7 +78,7 @@ impl MMU {
     /// Read a byte from address.
     pub fn rb(&self, address: u16) -> u8 {
         match address {
-            0xFF46 => panic!("0xff46: OAM DMA cannot be read from."),
+            0xFF46 => self.crash(format!("0xff46: OAM DMA cannot be read from.")),
             0x00..=0xFF => {
                 if self.hwreg.bootrom_enabled {
                     self.bootrom.rb(address)
@@ -80,12 +86,19 @@ impl MMU {
                     self.cartridge.rb(address)
                 }
             }
+            UNUSABLE_BOT..=UNUSABLE_TOP => 0xFF,
             HWREG_BOT..=HWREG_TOP => self.hwreg.get(address), // Some are not readable.
             HRAM_BOT..=HRAM_TOP => self.hram[(address - HRAM_BOT) as usize],
+            OAM_BOT..=OAM_TOP => self.oam[(address - OAM_BOT) as usize],
             SRAM_BOT..=SRAM_TOP => self.sram[(address - SRAM_BOT) as usize],
             VRAM_BOT..=VRAM_TOP => self.vram[(address - VRAM_BOT) as usize],
             CART_ROM_BOT..=CART_ROM_TOP => self.cartridge.rb(address),
-            _ => panic!("Tried to read from {:#x} which is not mapped.", address),
+            _ => {
+                self.crash(format!(
+                    "Tried to read from {:#x} which is not mapped.",
+                    address
+                ));
+            }
         }
     }
 
@@ -93,11 +106,17 @@ impl MMU {
     pub fn wb(&mut self, address: u16, value: u8) {
         match address {
             0xFF46 => self.oam_dma(address),
+            UNUSABLE_BOT..=UNUSABLE_TOP => (),
             HWREG_BOT..=HWREG_TOP => self.hwreg.set(address, value), // Some are not writable.
+            OAM_BOT..=OAM_TOP => self.oam[(address - OAM_BOT) as usize] = value,
             HRAM_BOT..=HRAM_TOP => self.hram[(address - HRAM_BOT) as usize] = value,
             SRAM_BOT..=SRAM_TOP => self.sram[(address - SRAM_BOT) as usize] = value,
             VRAM_BOT..=VRAM_TOP => self.vram[(address - VRAM_BOT) as usize] = value,
-            _ => panic!("Tried to write to {:#x} which is not mapped.", address),
+            CART_ROM_BOT..=CART_ROM_TOP => self.cartridge.wb(address, value),
+            _ => self.crash(format!(
+                "Tried to write to {:#x} which is not mapped.",
+                address
+            )),
         }
     }
 
@@ -157,6 +176,14 @@ impl MMU {
         // Assert that address is a multiple of 0x100  address % 0x100 == 0
         // Write tests that set up some memory to be copied, performs a copy, and checks that it was
         // copied. Can probably just set a byte at address and a byte at address + 159
+    }
+
+    /// Panic with a given message, but also printout some debug info.
+    /// By making it a diverging function, we don't care about return type.
+    fn crash(&self, msg: String) -> ! {
+        println!("Debug Info");
+        println!("PC: {:#06x}", self.pc);
+        panic!("{}", msg);
     }
 }
 
