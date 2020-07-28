@@ -37,6 +37,7 @@ pub struct MMU {
     bootrom: BootRom,
     pub hwreg: HardwareRegisters,
     cartridge: Cartridge,
+    pub ime: bool,
     pub pc: u16,
     pub sp: u16,
     pub a: u8,
@@ -61,6 +62,7 @@ impl MMU {
             bootrom: BootRom::new(),
             hwreg: HardwareRegisters::new(),
             cartridge: Cartridge::new(cartridge_path),
+            ime: true,
             pc: 0,
             sp: 0, // Initialized by the software.
             a: 0,
@@ -92,6 +94,7 @@ impl MMU {
             SRAM_BOT..=SRAM_TOP => self.sram[(address - SRAM_BOT) as usize],
             VRAM_BOT..=VRAM_TOP => self.vram[(address - VRAM_BOT) as usize],
             CART_ROM_BOT..=CART_ROM_TOP => self.cartridge.rb(address),
+            0xFFFF => self.hwreg.get(0xFFFF),
             _ => {
                 self.dump(format!(
                     "Tried to read from {:#x} which is not mapped.",
@@ -112,6 +115,7 @@ impl MMU {
             SRAM_BOT..=SRAM_TOP => self.sram[(address - SRAM_BOT) as usize] = value,
             VRAM_BOT..=VRAM_TOP => self.vram[(address - VRAM_BOT) as usize] = value,
             CART_ROM_BOT..=CART_ROM_TOP => self.cartridge.wb(address, value),
+            0xFFFF => self.hwreg.set(0xFFFF, value),
             _ => self.dump(format!(
                 "Tried to write to {:#x} which is not mapped.",
                 address

@@ -146,10 +146,10 @@ impl PPU {
             let pixel_value = (p1 << 1) + p0;
 
             // Get the palette value for this pixel value.
-            // Multiply by 2 because hwreg.bgp is 4  2-bit values. To get the color_value for pixel
-            // 00 -> 00,   01 -> 02,  02 -> 04,  03 -> 06.  Mask by 0b11 because the color value is
-            // two bits.
-            let color_value = (mmu.hwreg.bgp >> (pixel_value * 2)) & 0x3;
+            // Multiply by 2 because hwreg.background_palette is 4  2-bit values. To get the
+            // color_value for pixel 00 -> 00,   01 -> 02,  02 -> 04,  03 -> 06.  Mask by 0b11
+            // because the color value is two bits.
+            let color_value = (mmu.hwreg.background_palette >> (pixel_value * 2)) & 0x3;
 
             // Update the image buffer with this pixel value. Given a well-behaved main loop should
             // iterate through every pixel, there is no need to clear the previous buffer data.

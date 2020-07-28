@@ -5,8 +5,8 @@ use super::MMU;
 pub fn alu_xor(mmu: &mut MMU, n: u8) {
     mmu.a ^= n;
     mmu.set_flag_z(mmu.a == 0);
-    mmu.set_flag_h(false);
     mmu.set_flag_n(false);
+    mmu.set_flag_h(false);
     mmu.set_flag_c(false);
 }
 
@@ -15,8 +15,18 @@ pub fn alu_xor(mmu: &mut MMU, n: u8) {
 pub fn alu_or(mmu: &mut MMU, n: u8) {
     mmu.a |= n;
     mmu.set_flag_z(mmu.a == 0);
-    mmu.set_flag_h(false);
     mmu.set_flag_n(false);
+    mmu.set_flag_h(false);
+    mmu.set_flag_c(false);
+}
+
+/// Logical AND n with register A, result stored in A.
+/// Flags [Z 0 1 0]
+pub fn alu_and(mmu: &mut MMU, n: u8) {
+    mmu.a &= n;
+    mmu.set_flag_z(mmu.a == 0);
+    mmu.set_flag_n(false);
+    mmu.set_flag_h(true);
     mmu.set_flag_c(false);
 }
 
@@ -49,8 +59,8 @@ pub fn alu_dec(mmu: &mut MMU, value: u8) -> u8 {
     new_value
 }
 
-/// Test a specific bit of a given byte.
-/// If the provided bit
+/// Test if a specific bit of a byte is high or low. If low, set Z (zero flag).
+/// Flags: [Z 0 1 -]
 pub fn alu_bit(mmu: &mut MMU, bit_index: u8, value: u8) {
     let mask = 0b1 << bit_index;
     let is_unset = value & mask == 0;
@@ -116,11 +126,20 @@ pub fn alu_cp(mmu: &mut MMU, value: u8) {
     mmu.set_flag_c(mmu.a < value);
 }
 
+/// Complement A.
+/// Flags: [- 1 1 -]
+pub fn alu_cpl(mmu: &mut MMU) {
+    mmu.a = !mmu.a;
+    mmu.set_flag_n(true);
+    mmu.set_flag_h(true);
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    /// Assert that all flags are certain values.
+    ///Assert that all flags are certain values.
+    /// Z N H C
     /// We use a macro instead of a function so that test failures provide more useful lines.
     /// A normal function will just point to a line up here instead of the offending test. We could
     /// enable a full stack trace but that gets really irritating to wade through while debugging.
@@ -259,5 +278,35 @@ mod tests {
         alu_or(mmu, 0x00);
         assert_eq!(mmu.a, 0x00);
         assert_flags!(mmu, true, false, false, false);
+    }
+
+    #[test]
+    fn test_alu_and() {
+        let mmu = &mut MMU::new(None);
+        alu_and(mmu, 0x11);
+        assert_eq!(mmu.a, 0x00);
+        assert_flags!(mmu, true, false, true, false);
+
+        alu_and(mmu, 0xFF);
+        assert_eq!(mmu.a, 0x00);
+        assert_flags!(mmu, true, false, true, false);
+
+        mmu.a = 0xF0;
+        alu_and(mmu, 0xF0);
+        assert_eq!(mmu.a, 0xF0);
+        assert_flags!(mmu, false, false, true, false);
+
+        mmu.a = 0xF0;
+        alu_and(mmu, 0xE0);
+        assert_eq!(mmu.a, 0xE0);
+        assert_flags!(mmu, false, false, true, false);
+    }
+
+    #[test]
+    fn test_alu_cpl() {
+        let mmu = &mut MMU::new(None);
+        mmu.a = 0b10101100;
+        alu_cpl(mmu);
+        assert_eq!(mmu.a, 0b01010011); // The inverse of all bits.
     }
 }

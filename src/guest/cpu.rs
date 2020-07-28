@@ -62,6 +62,8 @@ impl CPU {
             ..
         } = *mmu;
 
+        let flag_z = mmu.flag_z();
+
         let bc = mmu.bc();
         let de = mmu.de();
         let hl = mmu.hl();
@@ -129,7 +131,9 @@ impl CPU {
                     mmu.a = mmu.rb(hl);
                     mmu.set_hl(hl.wrapping_add(1));
                 }
+                0x2C => mmu.l = alu_inc(mmu, l),
                 0x2E => mmu.l = mmu.get_next_byte(),
+                0x2F => alu_cpl(mmu),
                 0x31 => {
                     let w = mmu.get_next_word();
                     mmu.sp = w
@@ -139,22 +143,27 @@ impl CPU {
                     let new_hl = hl.wrapping_sub(1);
                     mmu.set_hl(new_hl); // Decrement.
                 }
+                0x36 => {
+                    let d8 = mmu.get_next_byte();
+                    mmu.wb(hl, d8);
+                }
                 0x3D => mmu.a = alu_dec(mmu, a),
                 0x3E => mmu.a = mmu.get_next_byte(),
                 0x4F => mmu.c = a,
                 0x57 => mmu.d = a,
+                0x5F => mmu.e = a,
                 0x67 => mmu.h = a,
                 0x77 => mmu.wb(hl, a),
                 0x78 => mmu.a = b,
                 0x7B => mmu.a = e,
                 0x7C => mmu.a = h,
                 0x7D => mmu.a = l,
-                0x86 => {
-                    let value = mmu.rb(mmu.hl());
-                    alu_add(mmu, value);
-                }
+                0x7E => mmu.a = mmu.rb(hl),
+                0x86 => alu_add(mmu, mmu.rb(hl)),
+                0x87 => alu_add(mmu, a),
                 0x90 => alu_sub(mmu, b),
                 0x9F => alu_sbc(mmu, a),
+                0xA7 => alu_and(mmu, a),
                 0xAF => alu_xor(mmu, a),
                 0xB1 => alu_or(mmu, c),
                 0xBE => {
@@ -165,8 +174,14 @@ impl CPU {
                     let address = mmu.pop_stack();
                     mmu.set_bc(address);
                 }
-                0xC3 => mmu.pc = mmu.pc.wrapping_add(mmu.get_next_word()),
+                0xC3 => mmu.pc = mmu.get_next_word(),
                 0xC5 => mmu.push_stack(bc),
+                0xC8 => {
+                    if flag_z {
+                        mmu.pc = mmu.pop_stack();
+                        condition_met = true;
+                    }
+                }
                 0xC9 => mmu.pc = mmu.pop_stack(),
                 0xCD => {
                     let a16 = mmu.get_next_word(); // Advances mmu.pc to the next instruction.
@@ -177,14 +192,34 @@ impl CPU {
                     let addr = mmu.get_next_byte();
                     mmu.wb(0xFF00 + addr as u16, a);
                 }
+                0xE1 => {
+                    let value = mmu.pop_stack();
+                    mmu.set_hl(value);
+                }
                 0xE2 => mmu.wb(0xFF00 + c as u16, a),
+                0xE6 => {
+                    let d8 = mmu.get_next_byte();
+                    alu_and(mmu, d8);
+                }
                 0xEA => {
                     let d8 = mmu.get_next_word();
                     mmu.wb(d8, a)
                 }
+                0xEF => {
+                    mmu.push_stack(mmu.pc);
+                    mmu.pc = 0x0028;
+                }
                 0xF0 => {
                     let addr = 0xFF00 + (mmu.get_next_byte() as u16);
                     mmu.a = mmu.rb(addr);
+                }
+                0xF3 => {
+                    // TODO: understand IME better. Rboy does somthing special.
+                    mmu.ime = false;
+                }
+                0xFB => {
+                    // TODO: understand IME better.
+                    mmu.ime = true;
                 }
                 0xFE => {
                     let d8 = mmu.get_next_byte();
@@ -194,6 +229,7 @@ impl CPU {
             }
         } else {
             match opcode {
+                0x5F => alu_bit(mmu, 3, a),
                 0x7C => alu_bit(mmu, 7, h),
                 0x11 => mmu.c = alu_rl(mmu, c),
                 _ => self.panic_opcode(opcode, is_cbprefix, op_address, mmu),
