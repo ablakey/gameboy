@@ -75,12 +75,28 @@ pub fn alu_bit(mmu: &mut MMU, bit_index: u8, value: u8) {
 /// Half-carry is calculated by isolating the lower nibble and seeing if the sum exceeds 15.
 /// Flags: [Z 0 H C]
 pub fn alu_add(mmu: &mut MMU, value: u8) {
-    let new_a = mmu.a.wrapping_add(value);
+    let (new_a, overflow) = mmu.a.overflowing_add(value);
     mmu.set_flag_z(new_a == 0);
     mmu.set_flag_n(false);
     mmu.set_flag_h((mmu.a & 0xF) + (value & 0xF) > 0xF);
-    mmu.set_flag_c(mmu.a as u16 + value as u16 > 0xFF);
+    mmu.set_flag_c(overflow);
     mmu.a = new_a;
+}
+
+/// Add 16-bit value to HL.
+/// The half-carry is for overflow out of bit 11. That's calculated by isolating bit 11 with a mask
+/// then seeing if the sum is greater than 0x7FF (ie. there's a value in any bit above 11).
+/// The carry is the same concept but for bit 15. Instead of causing an overflow, we just check to
+/// see if there would be one.
+/// Flags: [- 0 H C]
+pub fn alu_add_16(mmu: &mut MMU, value: u16) {
+    let hl = mmu.hl();
+    let (new_hl, overflow) = hl.overflowing_add(value);
+    mmu.set_flag_n(false);
+    mmu.set_flag_h((hl & 0x07FF) + (value & 0x07FF) > 0x07FF);
+    mmu.set_flag_c(hl > 0xFFFF - value);
+    mmu.set_flag_c(overflow);
+    mmu.set_hl(new_hl);
 }
 
 /// Subtract value from A.
@@ -132,6 +148,26 @@ pub fn alu_cpl(mmu: &mut MMU) {
     mmu.a = !mmu.a;
     mmu.set_flag_n(true);
     mmu.set_flag_h(true);
+}
+
+/// Swap upper four and lower four bits.
+/// Note that the zero flag is equivalent to if the value is zero. Swapping bits won't change
+/// anything if it's zero.
+/// Flags: [Z 0 0 0]
+pub fn alu_swap(mmu: &mut MMU, value: u8) -> u8 {
+    mmu.set_flag_z(value == 0);
+    mmu.set_flag_n(false);
+    mmu.set_flag_h(false);
+    mmu.set_flag_c(false);
+    // Swap by shifting MSBs down, LSBs up, and unioning the two results.
+    (value >> 4) | (value << 4)
+}
+
+/// Reset bit in input value. For example, if value was register A of 0xFF and we reset bit 0, the
+/// resulting value would be 0xFE.
+/// Flags: [- - - -]
+pub fn alu_res(bit: u8, value: u8) -> u8 {
+    value & !(1 << bit)
 }
 
 #[cfg(test)]
@@ -308,5 +344,33 @@ mod tests {
         mmu.a = 0b10101100;
         alu_cpl(mmu);
         assert_eq!(mmu.a, 0b01010011); // The inverse of all bits.
+        assert_flags!(mmu, false, true, true, false);
+    }
+
+    #[test]
+    fn test_alu_swap() {
+        let mmu = &mut MMU::new(None);
+        let result = alu_swap(mmu, 0b11110000);
+        assert_eq!(result, 0b00001111);
+        assert_flags!(mmu, false, false, false, false);
+    }
+
+    #[test]
+    fn test_alu_add_16() {
+        let mmu = &mut MMU::new(None);
+        alu_add_16(mmu, 0xFFFF);
+        assert_eq!(mmu.hl(), 0xFFFF);
+        assert_flags!(mmu, false, false, false, false);
+
+        alu_add_16(mmu, 0xFFFF); // Both overflows.
+        assert_eq!(mmu.hl(), 0xFFFE);
+        assert_flags!(mmu, false, false, true, true);
+    }
+
+    #[test]
+    fn test_alu_res() {
+        assert_eq!(alu_res(0, 0xFF), 0xFE);
+        assert_eq!(alu_res(1, 0xFF), 0xFD);
+        assert_eq!(alu_res(7, 0xFF), 0x7F);
     }
 }

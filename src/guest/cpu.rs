@@ -64,6 +64,7 @@ impl CPU {
 
         let flag_z = mmu.flag_z();
 
+        let af = mmu.af();
         let bc = mmu.bc();
         let de = mmu.de();
         let hl = mmu.hl();
@@ -87,6 +88,7 @@ impl CPU {
                     let d16 = mmu.get_next_word();
                     mmu.set_de(d16);
                 }
+                0x12 => mmu.wb(de, a),
                 0x13 => mmu.set_de(de.wrapping_add(1)),
                 0x15 => mmu.d = alu_dec(mmu, d),
                 0x16 => mmu.d = mmu.get_next_byte(),
@@ -99,12 +101,13 @@ impl CPU {
                     let r8 = mmu.get_signed_byte(); // Must get first as it mutates PC.
                     mmu.pc = mmu.pc.wrapping_add(r8 as u16);
                 }
+                0x19 => alu_add_16(mmu, de),
                 0x1A => mmu.a = mmu.rb(de),
+                0x1C => mmu.e = alu_inc(mmu, e),
                 0x1D => mmu.e = alu_dec(mmu, e),
                 0x1E => mmu.e = mmu.get_next_byte(),
                 0x20 => {
-                    // Need to get byte to inc PC either way.
-                    let r8 = mmu.get_signed_byte();
+                    let r8 = mmu.get_signed_byte(); // Need to get byte to inc PC either way.
                     if !mmu.flag_z() {
                         mmu.pc = mmu.pc.wrapping_add(r8 as u16);
                         condition_met = true;
@@ -149,12 +152,16 @@ impl CPU {
                 }
                 0x3D => mmu.a = alu_dec(mmu, a),
                 0x3E => mmu.a = mmu.get_next_byte(),
+                0x47 => mmu.b = a,
                 0x4F => mmu.c = a,
+                0x56 => mmu.d = mmu.rb(hl),
                 0x57 => mmu.d = a,
+                0x5E => mmu.e = mmu.rb(hl),
                 0x5F => mmu.e = a,
                 0x67 => mmu.h = a,
                 0x77 => mmu.wb(hl, a),
                 0x78 => mmu.a = b,
+                0x79 => mmu.a = c,
                 0x7B => mmu.a = e,
                 0x7C => mmu.a = h,
                 0x7D => mmu.a = l,
@@ -163,8 +170,11 @@ impl CPU {
                 0x87 => alu_add(mmu, a),
                 0x90 => alu_sub(mmu, b),
                 0x9F => alu_sbc(mmu, a),
+                0xA1 => alu_and(mmu, c),
                 0xA7 => alu_and(mmu, a),
+                0xA9 => alu_xor(mmu, c),
                 0xAF => alu_xor(mmu, a),
+                0xB0 => alu_or(mmu, b),
                 0xB1 => alu_or(mmu, c),
                 0xBE => {
                     let value = mmu.rb(hl);
@@ -183,11 +193,23 @@ impl CPU {
                     }
                 }
                 0xC9 => mmu.pc = mmu.pop_stack(),
+                0xCA => {
+                    let address = mmu.get_next_word(); // Need to get regardless to advance PC.
+                    if flag_z {
+                        mmu.pc = address;
+                        condition_met = true;
+                    }
+                }
                 0xCD => {
                     let a16 = mmu.get_next_word(); // Advances mmu.pc to the next instruction.
                     mmu.push_stack(mmu.pc); // mmu.pc is the next instruction to be run.
                     mmu.pc = a16;
                 }
+                0xD1 => {
+                    let value = mmu.pop_stack();
+                    mmu.set_de(value);
+                }
+                0xD5 => mmu.push_stack(de),
                 0xE0 => {
                     let addr = mmu.get_next_byte();
                     mmu.wb(0xFF00 + addr as u16, a);
@@ -197,10 +219,12 @@ impl CPU {
                     mmu.set_hl(value);
                 }
                 0xE2 => mmu.wb(0xFF00 + c as u16, a),
+                0xE5 => mmu.push_stack(hl),
                 0xE6 => {
                     let d8 = mmu.get_next_byte();
                     alu_and(mmu, d8);
                 }
+                0xE9 => mmu.pc = hl,
                 0xEA => {
                     let d8 = mmu.get_next_word();
                     mmu.wb(d8, a)
@@ -217,6 +241,11 @@ impl CPU {
                     // TODO: understand IME better. Rboy does somthing special.
                     mmu.ime = false;
                 }
+                0xF5 => mmu.push_stack(af),
+                0xFA => {
+                    let address = mmu.get_next_word();
+                    mmu.a = mmu.rb(address);
+                }
                 0xFB => {
                     // TODO: understand IME better.
                     mmu.ime = true;
@@ -232,6 +261,8 @@ impl CPU {
                 0x5F => alu_bit(mmu, 3, a),
                 0x7C => alu_bit(mmu, 7, h),
                 0x11 => mmu.c = alu_rl(mmu, c),
+                0x37 => mmu.a = alu_swap(mmu, a),
+                0x87 => mmu.a = alu_res(0, a),
                 _ => self.panic_opcode(opcode, is_cbprefix, op_address, mmu),
             }
         }
