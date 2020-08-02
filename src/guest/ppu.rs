@@ -4,6 +4,15 @@ pub struct PPU {
 }
 use super::mmu::{MMU, TILEDATA_0, TILEDATA_1, TILEMAP_0, TILEMAP_1};
 
+/// Convert a tile data offset t
+fn get_tile_data_address(base_address: u16, tile_number: u8) -> u16 {
+    if base_address == TILEDATA_1 {
+        base_address + ((tile_number as i8 as i16 + 128) as u16 * 16)
+    } else {
+        base_address + (tile_number as u16 * 16)
+    }
+}
+
 impl PPU {
     pub fn new() -> Self {
         Self {
@@ -117,15 +126,15 @@ impl PPU {
             // tile. We then walk the row-major grid to get the single tile number.
             let tile_row_num = y / 8;
             let tile_col_num = x / 8;
-            let tile_num = tile_row_num as u16 * 32 + tile_col_num as u16;
+            let tile_number = tile_row_num as u16 * 32 + tile_col_num as u16;
 
             // We can then look up the tile's data address by accessing the tile map at the offset
             // address + tile number. To find the address of the correct tile, multiply this address
             // by 16 (the size of each whole tile's worth of data) and add (or subtract) that to
             // the tiledata_base_address.
-            // TODO: tile_address_offset might need to be treated as a signed value/
-            let tile_address_offset = mmu.rb(tilemap_address + tile_num) as u16;
-            let tile_data_address = tiledata_base_address + (tile_address_offset * 16);
+            // // If we are accessing TILEDATA_1, we need to access it with a signed offset.
+            let tile_data_number = mmu.rb(tilemap_address + tile_number);
+            let tile_data_address = get_tile_data_address(tiledata_base_address, tile_data_number);
 
             // Get the pixel coordinates in the local 8x8 tile.
             let pixel_row_num = y % 8;
@@ -155,5 +164,26 @@ impl PPU {
             // iterate through every pixel, there is no need to clear the previous buffer data.
             self.image_buffer[line as usize * 160 + x as usize] = color_value;
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_get_tile_data_address() {
+        // low tile data, access as unsigned.
+        let result = get_tile_data_address(0x8000, 0xFF);
+        assert_eq!(result, 0x8FF0);
+
+        // high tile data, access as signed.
+        // 0x00 would be on the middle value (0x9000)
+        let result = get_tile_data_address(0x8800, 0x00);
+        assert_eq!(result, 0x9000);
+
+        // 0b10000000
+        let result = get_tile_data_address(0x8800, 0x80);
+        assert_eq!(result, 0x8800);
     }
 }

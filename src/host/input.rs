@@ -10,6 +10,7 @@ pub enum InputEvent {
     Tick,
     SaveState,
     RestoreState,
+    Panic,
 }
 
 pub struct Input {
@@ -52,6 +53,10 @@ impl Input {
                     keycode: Some(Keycode::Right),
                     ..
                 } => InputEvent::Tick,
+                Event::KeyUp {
+                    keycode: Some(Keycode::P),
+                    ..
+                } => InputEvent::Panic,
                 Event::KeyDown { .. } => InputEvent::None,
                 _ => InputEvent::None,
             };

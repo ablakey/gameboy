@@ -3,6 +3,8 @@ mod guest;
 mod host;
 use emulator::Emulator;
 use std::env;
+mod debug;
+use std::panic;
 
 fn main() {
     let args: Vec<String> = env::args().collect();
@@ -14,6 +16,15 @@ fn main() {
 
     let cartridge_path = &args[1];
 
-    let emulator = Emulator::new(Some(cartridge_path));
-    emulator.unwrap().run_forever();
+    let mut emulator = Emulator::new(Some(cartridge_path)).unwrap();
+
+    let result = panic::catch_unwind(panic::AssertUnwindSafe(|| emulator.run_forever()));
+
+    match result {
+        Err(e) => {
+            emulator.dump_state();
+            panic!("{:?}", e);
+        }
+        _ => (),
+    }
 }

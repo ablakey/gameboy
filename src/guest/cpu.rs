@@ -237,6 +237,10 @@ impl CPU {
                     let addr = 0xFF00 + (mmu.get_next_byte() as u16);
                     mmu.a = mmu.rb(addr);
                 }
+                0xF1 => {
+                    let addr = mmu.pop_stack();
+                    mmu.set_af(addr);
+                }
                 0xF3 => {
                     // TODO: understand IME better. Rboy does somthing special.
                     mmu.ime = false;
@@ -284,6 +288,6 @@ impl CPU {
             operation_address
         );
 
-        mmu.dump(msg);
+        panic!("{}", msg);
     }
 }

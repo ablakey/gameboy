@@ -8,7 +8,6 @@ pub struct Emulator {
     mmu: MMU,
     input: Input,
     screen: Screen,
-    is_paused: bool,
 }
 
 impl Emulator {
@@ -22,7 +21,6 @@ impl Emulator {
             mmu: MMU::new(cartridge_path),
             ppu: PPU::new(),
             input,
-            is_paused: false,
             screen,
         })
     }
@@ -32,12 +30,15 @@ impl Emulator {
             // Handle program I/O (events that affect the emulator). This needs to be
             match self.input.get_event() {
                 InputEvent::Exit => break 'program,
-                InputEvent::ToggleRun => self.is_paused = !self.is_paused,
+                InputEvent::Panic => panic!("Panic caused by user."),
                 _ => (),
             }
-
             self.emulate_frame();
         }
+    }
+
+    pub fn dump_state(&self) {
+        self.mmu.dump_state();
     }
 
     fn emulate_frame(&mut self) {

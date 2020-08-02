@@ -2,9 +2,11 @@ mod bootrom;
 mod cartridge;
 mod hwreg;
 mod reg;
+use crate::debug;
 use bootrom::BootRom;
 use cartridge::Cartridge;
 use hwreg::HardwareRegisters;
+use std::panic;
 
 /// Memory map addresses
 const UNUSABLE_TOP: u16 = 0xFEFF; // Unusable memory. Writes do nothing, Reads return 0xFF.
@@ -79,7 +81,7 @@ impl MMU {
     /// Read a byte from address.
     pub fn rb(&self, address: u16) -> u8 {
         match address {
-            0xFF46 => self.dump(format!("0xff46: OAM DMA cannot be read from.")),
+            0xFF46 => panic!("0xff46: OAM DMA cannot be read from."),
             0x00..=0xFF => {
                 if self.hwreg.bootrom_enabled {
                     self.bootrom.rb(address)
@@ -96,10 +98,7 @@ impl MMU {
             CART_ROM_BOT..=CART_ROM_TOP => self.cartridge.rb(address),
             0xFFFF => self.hwreg.get(0xFFFF),
             _ => {
-                self.dump(format!(
-                    "Tried to read from {:#x} which is not mapped.",
-                    address
-                ));
+                panic!("Tried to read from {:#x} which is not mapped.", address);
             }
         }
     }
@@ -116,10 +115,7 @@ impl MMU {
             VRAM_BOT..=VRAM_TOP => self.vram[(address - VRAM_BOT) as usize] = value,
             CART_ROM_BOT..=CART_ROM_TOP => self.cartridge.wb(address, value),
             0xFFFF => self.hwreg.set(0xFFFF, value),
-            _ => self.dump(format!(
-                "Tried to write to {:#x} which is not mapped.",
-                address
-            )),
+            _ => panic!("Tried to write to {:#x} which is not mapped.", address),
         }
     }
 
@@ -177,14 +173,28 @@ impl MMU {
         // Assert that address is a multiple of 0x100  address % 0x100 == 0
         // Write tests that set up some memory to be copied, performs a copy, and checks that it was
         // copied. Can probably just set a byte at address and a byte at address + 159
+        panic!("DMA");
     }
 
     /// Panic with a given message, but also printout some debug info.
     /// By making it a diverging function, we don't care about return type.
-    pub fn dump(&self, msg: String) -> ! {
-        println!("Debug Info");
-        println!("PC: {:#06x}", self.pc);
-        panic!("{}", msg);
+    pub fn dump_state(&self) {
+        // Dump VRAM
+        let vram_dump = debug::format_hex(&self.vram.to_vec(), VRAM_BOT);
+        debug::dump_to_file(vram_dump, "vram");
+
+        // Dump SRAM
+        let vram_dump = debug::format_hex(&self.sram.to_vec(), SRAM_BOT);
+        debug::dump_to_file(vram_dump, "sram");
+
+        // Dump tilemaps
+        let tilemap0 = (TILEMAP_0 - VRAM_BOT) as usize;
+        let tilemap0_dump = debug::format_tilemap(&self.vram[tilemap0..tilemap0 + 1024]);
+        debug::dump_to_file(tilemap0_dump, "tilemap0");
+
+        let tilemap1 = (TILEMAP_1 - VRAM_BOT) as usize;
+        let tilemap0_dump = debug::format_tilemap(&self.vram[tilemap1..tilemap1 + 1024]);
+        debug::dump_to_file(tilemap0_dump, "tilemap1");
     }
 }
 
