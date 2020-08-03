@@ -143,7 +143,7 @@ impl HardwareRegisters {
     /// are not readable.
     pub fn get(&self, address: u16) -> u8 {
         match address {
-            0xFF00 => 0x00, // TODO: gamepad read.
+            0xFF00 => 0xFF, // TODO: gamepad read.
             0xFF01 => 0xFF, // TODO: serial read.
             0xFF02 => 0xFF, // TODO: serial control.
             0xFF40 => {
