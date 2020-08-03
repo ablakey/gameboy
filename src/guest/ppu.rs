@@ -23,7 +23,7 @@ impl PPU {
 
     /// TODO: explain the mode cycle and clocks.
     pub fn step(&mut self, mmu: &mut MMU, cycles: u8) {
-        let mode = mmu.hwreg.mode;
+        let mode = mmu.hwreg.ppu.mode;
 
         // Increase the clock by number of cycles being emulated. This will govern what needs
         // to happen next such as changing modes. It is possible that we exceed the number of
@@ -37,14 +37,14 @@ impl PPU {
         // in sync. When OAM is needed, it will be read at what's effectively instantaneous speed.
         if mode == 2 && self.modeclock >= 80 {
             self.modeclock -= 80;
-            mmu.hwreg.mode = 3;
+            mmu.hwreg.ppu.mode = 3;
             return;
         }
 
         // VRAM read mode. End of mode 3 acts as end of scanline.
         if mode == 3 && self.modeclock >= 172 {
             self.modeclock -= 172;
-            mmu.hwreg.mode = 0;
+            mmu.hwreg.ppu.mode = 0;
             self.draw_scanline(mmu);
             return;
         }
@@ -53,14 +53,14 @@ impl PPU {
         // moving on to the next line or vblank.
         if mode == 0 && self.modeclock >= 204 {
             self.modeclock -= 204;
-            mmu.hwreg.line += 1; // Advance 1 line as we're in hblank.
+            mmu.hwreg.ppu.line += 1; // Advance 1 line as we're in hblank.
 
             // At the end of hblank, if on line 143, we've drawn all 144 lines and need to enter
             // vblank. Otherwise go back to mode 2 and loop again.
-            if mmu.hwreg.line == 143 {
-                mmu.hwreg.mode = 1;
+            if mmu.hwreg.ppu.line == 143 {
+                mmu.hwreg.ppu.mode = 1;
             } else {
-                mmu.hwreg.mode = 2;
+                mmu.hwreg.ppu.mode = 2;
             }
         }
 
@@ -69,17 +69,17 @@ impl PPU {
         if mode == 1 && self.modeclock >= 456 {
             self.modeclock -= 456;
 
-            if mmu.hwreg.line == 153 {
-                mmu.hwreg.mode = 2;
-                mmu.hwreg.line = 0;
+            if mmu.hwreg.ppu.line == 153 {
+                mmu.hwreg.ppu.mode = 2;
+                mmu.hwreg.ppu.line = 0;
             } else {
-                mmu.hwreg.line += 1;
+                mmu.hwreg.ppu.line += 1;
             }
         }
     }
 
     fn draw_scanline(&mut self, mmu: &MMU) {
-        if !mmu.hwreg.lcd_on {
+        if !mmu.hwreg.ppu.lcd_on {
             return;
         }
 
@@ -88,11 +88,11 @@ impl PPU {
 
     /// Draw a single scanline by iterating through a line of pixels and getting pixel data.
     fn draw_background_scanline(&mut self, mmu: &MMU) {
-        let line = mmu.hwreg.line;
+        let ppureg = &mmu.hwreg.ppu;
 
         // Use the LCDC hardware register to determine which of the two tilemap spaces we are
         // utilizing. They both behave the same in all ways.
-        let tilemap_address = if mmu.hwreg.bg_tilemap {
+        let tilemap_address = if ppureg.bg_tilemap {
             TILEMAP_1
         } else {
             TILEMAP_0
@@ -101,7 +101,7 @@ impl PPU {
         // Use the LCDC hardware register to determine which of the two tile data spaces in VRAM we
         // are utilizing. The upper tiledata table beginning at 0x8800 needs to be accessed
         // with a signed value, indexing on 0x9000.
-        let tiledata_base_address = if mmu.hwreg.tile_data_table {
+        let tiledata_base_address = if ppureg.tile_data_table {
             TILEDATA_0
         } else {
             TILEDATA_1
@@ -109,8 +109,8 @@ impl PPU {
 
         // Scroll offsets.  The tile maps represent a 256x256 scene of pixels. We only want to
         // render a 160x144 viewport of it.
-        let scy = mmu.hwreg.scy;
-        let scx = mmu.hwreg.scx;
+        let scy = ppureg.scy;
+        let scx = ppureg.scx;
 
         // We want to iterate through 160 pixels to draw one scanline.
         for x in 0..160u8 {
@@ -118,7 +118,7 @@ impl PPU {
             // register values. This accounts for the viewport we want to draw not being the same
             // as the 256x256 tilemap scene.
             let x = x.wrapping_add(scx);
-            let y = line.wrapping_add(scy);
+            let y = ppureg.line.wrapping_add(scy);
 
             // There are 1024 tiles mapped in a 32x32 grid of 8x8 pixel tiles. The 1024 tiles are
             // described in one of the two tile maps as a row-major array. To get the tile number
@@ -158,11 +158,11 @@ impl PPU {
             // Multiply by 2 because hwreg.background_palette is 4  2-bit values. To get the
             // color_value for pixel 00 -> 00,   01 -> 02,  02 -> 04,  03 -> 06.  Mask by 0b11
             // because the color value is two bits.
-            let color_value = (mmu.hwreg.background_palette >> (pixel_value * 2)) & 0x3;
+            let color_value = (ppureg.background_palette >> (pixel_value * 2)) & 0x3;
 
             // Update the image buffer with this pixel value. Given a well-behaved main loop should
             // iterate through every pixel, there is no need to clear the previous buffer data.
-            self.image_buffer[line as usize * 160 + x as usize] = color_value;
+            self.image_buffer[ppureg.line as usize * 160 + x as usize] = color_value;
         }
     }
 }
