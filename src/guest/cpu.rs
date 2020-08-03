@@ -146,6 +146,10 @@ impl CPU {
                     let new_hl = hl.wrapping_sub(1);
                     mmu.set_hl(new_hl); // Decrement.
                 }
+                0x35 => {
+                    let value = alu_dec(mmu, mmu.rb(hl));
+                    mmu.wb(hl, value);
+                }
                 0x36 => {
                     let d8 = mmu.get_next_byte();
                     mmu.wb(hl, d8);
