@@ -1,44 +1,27 @@
+mod apu;
 mod bootrom;
 mod cartridge;
-mod hwreg;
-mod reg;
+mod cpu;
+mod interrupts;
+mod ppu;
 use crate::debug;
+use apu::ApuRegisters;
 use bootrom::BootRom;
 use cartridge::Cartridge;
-use hwreg::HardwareRegisters;
+use interrupts::Interrupts;
+use ppu::PpuRegisters;
 use std::panic;
 
-/// Memory map addresses
-const UNUSABLE_TOP: u16 = 0xFEFF; // Unusable memory. Writes do nothing, Reads return 0xFF.
-const UNUSABLE_BOT: u16 = 0xFEA0;
-const HRAM_TOP: u16 = 0xFFFE;
-const HRAM_BOT: u16 = 0xFF80;
-const HWREG_TOP: u16 = 0xFF7F;
-const HWREG_BOT: u16 = 0xFF00;
-const OAM_TOP: u16 = 0xFE9F;
-const OAM_BOT: u16 = 0xFE00;
-const SRAM_TOP: u16 = 0xDFFF;
-const SRAM_BOT: u16 = 0xC000;
-const VRAM_TOP: u16 = 0x9FFF;
-const VRAM_BOT: u16 = 0x8000;
-const CART_ROM_TOP: u16 = 0x7FFF; // Range includes parts of cartridge like interrupt vectors.
-const CART_ROM_BOT: u16 = 0x0000;
-
-pub const TILEMAP_1: u16 = 0x9C00;
-pub const TILEMAP_0: u16 = 0x9800;
-
-pub const TILEDATA_1: u16 = 0x8800;
-pub const TILEDATA_0: u16 = 0x8000;
-
-// TODO explain (that MMU has memory, registers, io regsiters (TBD) and other state)
 pub struct MMU {
     hram: [u8; 0x7F],   // 127 bytes of "High RAM" (DMA accessible) aka Zero page.
     oam: [u8; 0xA0],    // 160 bytes of OAM RAM.
     sram: [u8; 0x2000], // 8KB (no GBC banking support).
     vram: [u8; 0x2000], // 8KB graphics RAM.
     bootrom: BootRom,
-    pub hwreg: HardwareRegisters,
+    pub ppureg: PpuRegisters,
+    apureg: ApuRegisters,
     cartridge: Cartridge,
+    interrupts: Interrupts,
     pub ime: bool,
     pub pc: u16,
     pub sp: u16,
@@ -52,18 +35,19 @@ pub struct MMU {
     f: u8,
 }
 
-// TODO explain
 impl MMU {
     /// Initialize the MMU by loading the boot_rom into the first 256 addressable bytes.
     pub fn new(cartridge_path: Option<&String>) -> Self {
         Self {
+            bootrom: BootRom::new(),
+            cartridge: Cartridge::new(cartridge_path),
+            ppureg: PpuRegisters::new(),
+            apureg: ApuRegisters::new(),
+            interrupts: Interrupts::new(),
             hram: [0; 0x7F],
             oam: [0; 0xA0],
             sram: [0; 0x2000],
             vram: [0; 0x2000],
-            bootrom: BootRom::new(),
-            hwreg: HardwareRegisters::new(),
-            cartridge: Cartridge::new(cartridge_path),
             ime: true,
             pc: 0,
             sp: 0, // Initialized by the software.
@@ -81,22 +65,31 @@ impl MMU {
     /// Read a byte from address.
     pub fn rb(&self, address: u16) -> u8 {
         match address {
-            0xFF46 => panic!("0xff46: OAM DMA cannot be read from."),
             0x00..=0xFF => {
-                if self.hwreg.bootrom_enabled {
+                if self.bootrom.is_enabled {
                     self.bootrom.rb(address)
                 } else {
                     self.cartridge.rb(address)
                 }
             }
-            UNUSABLE_BOT..=UNUSABLE_TOP => 0xFF,
-            HWREG_BOT..=HWREG_TOP => self.hwreg.get(address), // Some are not readable.
-            HRAM_BOT..=HRAM_TOP => self.hram[(address - HRAM_BOT) as usize],
-            OAM_BOT..=OAM_TOP => self.oam[(address - OAM_BOT) as usize],
-            SRAM_BOT..=SRAM_TOP => self.sram[(address - SRAM_BOT) as usize],
-            VRAM_BOT..=VRAM_TOP => self.vram[(address - VRAM_BOT) as usize],
-            CART_ROM_BOT..=CART_ROM_TOP => self.cartridge.rb(address),
-            0xFFFF => self.hwreg.get(0xFFFF),
+            0x0000..=0x7FFF => self.cartridge.rb(address),
+            0x8000..=0x9FFF => self.vram[(address - 0x8000) as usize],
+            0xC000..=0xDFFF => self.sram[(address - 0xC000) as usize],
+            0xFE00..=0xFE9F => self.oam[(address - 0xFE00) as usize],
+            0xFEA0..=0xFEFF => 0xFF,
+            0xFF00 => 0xFF, // TODO: gamepad.
+            0xFF01 => 0,    // TODO: serial write.
+            0xFF02 => 0,    // TODO: serial control.
+            0xFF04 => 0,    // TODO: Divider timer register.
+            0xFF05 => 0,    // TODO: Timer Counter.
+            0xFF06 => 0,    // TODO: Timer Modulo.
+            0xFF07 => 0,    // TODO: Timer control.
+            0xFF0F => 0,    // TODO: Interrupt Flag (IF)
+            0xFF10..=0xFF3F => self.apureg.rb(address),
+            0xFF46 => panic!("0xff46: OAM DMA cannot be read from."),
+            0xFF40..=0xFF4B => self.ppureg.rb(address),
+            0xFF80..=0xFFFE => self.hram[(address - 0xFF80) as usize],
+            0xFFFF => self.interrupts.inte,
             _ => {
                 panic!("Tried to read from {:#x} which is not mapped.", address);
             }
@@ -106,15 +99,26 @@ impl MMU {
     /// Write an 8-bit value to an address.
     pub fn wb(&mut self, address: u16, value: u8) {
         match address {
+            0x0000..=0x7FFF => self.cartridge.wb(address, value),
+            0x8000..=0x9FFF => self.vram[(address - 0x8000) as usize] = value,
+            0xC000..=0xDFFF => self.sram[(address - 0xC000) as usize] = value,
+            0xFE00..=0xFE9F => self.oam[(address - 0xFE00) as usize] = value,
+            0xFEA0..=0xFEFF => (),
+            0xFF00 => (), // TODO: gamepad.
+            0xFF01 => (), // TODO: serial write.
+            0xFF02 => (), // TODO: serial control.
+            0xFF04 => (), // TODO: Divider timer register.
+            0xFF05 => (), // TODO: Timer Counter.
+            0xFF06 => (), // TODO: Timer Modulo.
+            0xFF07 => (), // TODO: Timer control.
+            0xFF0F => self.interrupts.intf = value,
+            0xFF10..=0xFF3F => self.apureg.wb(address, value),
             0xFF46 => self.oam_dma(address),
-            UNUSABLE_BOT..=UNUSABLE_TOP => (),
-            HWREG_BOT..=HWREG_TOP => self.hwreg.set(address, value), // Some are not writable.
-            OAM_BOT..=OAM_TOP => self.oam[(address - OAM_BOT) as usize] = value,
-            HRAM_BOT..=HRAM_TOP => self.hram[(address - HRAM_BOT) as usize] = value,
-            SRAM_BOT..=SRAM_TOP => self.sram[(address - SRAM_BOT) as usize] = value,
-            VRAM_BOT..=VRAM_TOP => self.vram[(address - VRAM_BOT) as usize] = value,
-            CART_ROM_BOT..=CART_ROM_TOP => self.cartridge.wb(address, value),
-            0xFFFF => self.hwreg.set(0xFFFF, value),
+            0xFF40..=0xFF4B => self.ppureg.wb(address, value),
+            0xFF50 => self.bootrom.is_enabled = false,
+            0xFF7F => (), // tetris.gb off-by-one error.
+            0xFF80..=0xFFFE => self.hram[(address - 0xFF80) as usize] = value,
+            0xFFFF => self.interrupts.inte = value,
             _ => panic!("Tried to write to {:#x} which is not mapped.", address),
         }
     }
@@ -180,19 +184,19 @@ impl MMU {
     /// By making it a diverging function, we don't care about return type.
     pub fn dump_state(&self) {
         // Dump VRAM
-        let vram_dump = debug::format_hex(&self.vram.to_vec(), VRAM_BOT);
+        let vram_dump = debug::format_hex(&self.vram.to_vec(), 0x8000);
         debug::dump_to_file(vram_dump, "vram");
 
         // Dump SRAM
-        let vram_dump = debug::format_hex(&self.sram.to_vec(), SRAM_BOT);
+        let vram_dump = debug::format_hex(&self.sram.to_vec(), 0xC000);
         debug::dump_to_file(vram_dump, "sram");
 
         // Dump tilemaps
-        let tilemap0 = (TILEMAP_0 - VRAM_BOT) as usize;
+        let tilemap0 = (0x9800 - 0x8000) as usize;
         let tilemap0_dump = debug::format_tilemap(&self.vram[tilemap0..tilemap0 + 1024]);
         debug::dump_to_file(tilemap0_dump, "tilemap0");
 
-        let tilemap1 = (TILEMAP_1 - VRAM_BOT) as usize;
+        let tilemap1 = (0x9C00 - 0x8000) as usize;
         let tilemap0_dump = debug::format_tilemap(&self.vram[tilemap1..tilemap1 + 1024]);
         debug::dump_to_file(tilemap0_dump, "tilemap1");
     }

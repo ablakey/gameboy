@@ -6,7 +6,7 @@ const BOOT_ROM_PATH: &'static str = "data/dmg_rom.bin";
 
 pub struct BootRom {
     data: [u8; 0x100],
-    pub is_active: bool,
+    pub is_enabled: bool,
 }
 
 impl BootRom {
@@ -14,7 +14,7 @@ impl BootRom {
         let data = Self::load_boot_rom().unwrap();
         Self {
             data,
-            is_active: true,
+            is_enabled: true,
         }
     }
 
@@ -29,7 +29,6 @@ impl BootRom {
     }
 
     pub fn rb(&self, addr: u16) -> u8 {
-        assert!(self.is_active); // Why trying to read boot rom when it's not active?
         self.data[addr as usize]
     }
 }

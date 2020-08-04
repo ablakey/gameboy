@@ -2,11 +2,11 @@ pub struct PPU {
     modeclock: usize, // Current clock step representing where the PPU is in its processing cycle.
     pub image_buffer: [u8; 160 * 144],
 }
-use super::mmu::{MMU, TILEDATA_0, TILEDATA_1, TILEMAP_0, TILEMAP_1};
+use super::mmu::MMU;
 
 /// Convert a tile data offset t
 fn get_tile_data_address(base_address: u16, tile_number: u8) -> u16 {
-    if base_address == TILEDATA_1 {
+    if base_address == 0x8800 {
         base_address + ((tile_number as i8 as i16 + 128) as u16 * 16)
     } else {
         base_address + (tile_number as u16 * 16)
@@ -23,7 +23,7 @@ impl PPU {
 
     /// TODO: explain the mode cycle and clocks.
     pub fn step(&mut self, mmu: &mut MMU, cycles: u8) {
-        let mode = mmu.hwreg.ppu.mode;
+        let mode = mmu.ppureg.mode;
 
         // Increase the clock by number of cycles being emulated. This will govern what needs
         // to happen next such as changing modes. It is possible that we exceed the number of
@@ -31,55 +31,57 @@ impl PPU {
         // self.modeclock. That allows excessive cycles to be carried over to the next mode.
         self.modeclock += cycles as usize;
 
+        // HBlank. Upon entering this state, we would have successfully drawn a line and are
+        // moving on to the next line or vblank.
+        // Transition: Mode 1 (VBlank) or Mode 2 (OAM Read)
+        if mode == 0 && self.modeclock >= 204 {
+            self.modeclock -= 204;
+            mmu.ppureg.line += 1; // Advance 1 line as we're in hblank.
+
+            // At the end of hblank, if on line 143, we've drawn all 144 lines and need to enter
+            // vblank. Otherwise go back to mode 2 and loop again.
+            if mmu.ppureg.line == 143 {
+                mmu.ppureg.mode = 1;
+            } else {
+                mmu.ppureg.mode = 2;
+            }
+        }
+
+        // VBlank. This runs for 10 lines (4560 cycles) and does increment hwreg.ly. It is valid
+        // for hwreg.ly to be a value of 144 to 152, representing when it is in vblank.
+        // Transition: Mode 2 (OAM Read)
+        if mode == 1 && self.modeclock >= 456 {
+            self.modeclock -= 456;
+
+            if mmu.ppureg.line == 153 {
+                mmu.ppureg.mode = 2;
+                mmu.ppureg.line = 0;
+            } else {
+                mmu.ppureg.line += 1;
+            }
+        }
+
         // OAM Read mode.
         // Note that we're not doing OAM read here. We're just simulating the amount of time that
         // the original hardware would take to OAM read. This is necessary to keep all timing
         // in sync. When OAM is needed, it will be read at what's effectively instantaneous speed.
         if mode == 2 && self.modeclock >= 80 {
             self.modeclock -= 80;
-            mmu.hwreg.ppu.mode = 3;
+            mmu.ppureg.mode = 3;
             return;
         }
 
         // VRAM read mode. End of mode 3 acts as end of scanline.
         if mode == 3 && self.modeclock >= 172 {
             self.modeclock -= 172;
-            mmu.hwreg.ppu.mode = 0;
+            mmu.ppureg.mode = 0;
             self.draw_scanline(mmu);
             return;
-        }
-
-        // HBlank. Upon entering this state, we would have successfully drawn a line and are
-        // moving on to the next line or vblank.
-        if mode == 0 && self.modeclock >= 204 {
-            self.modeclock -= 204;
-            mmu.hwreg.ppu.line += 1; // Advance 1 line as we're in hblank.
-
-            // At the end of hblank, if on line 143, we've drawn all 144 lines and need to enter
-            // vblank. Otherwise go back to mode 2 and loop again.
-            if mmu.hwreg.ppu.line == 143 {
-                mmu.hwreg.ppu.mode = 1;
-            } else {
-                mmu.hwreg.ppu.mode = 2;
-            }
-        }
-
-        // VBlank. This runs for 10 lines (4560 cycles) and does increment hwreg.ly. It is valid
-        // for hwreg.ly to be a value of 144 to 152, representing when it is in vblank.
-        if mode == 1 && self.modeclock >= 456 {
-            self.modeclock -= 456;
-
-            if mmu.hwreg.ppu.line == 153 {
-                mmu.hwreg.ppu.mode = 2;
-                mmu.hwreg.ppu.line = 0;
-            } else {
-                mmu.hwreg.ppu.line += 1;
-            }
         }
     }
 
     fn draw_scanline(&mut self, mmu: &MMU) {
-        if !mmu.hwreg.ppu.lcd_on {
+        if !mmu.ppureg.lcd_on {
             return;
         }
 
@@ -88,24 +90,20 @@ impl PPU {
 
     /// Draw a single scanline by iterating through a line of pixels and getting pixel data.
     fn draw_background_scanline(&mut self, mmu: &MMU) {
-        let ppureg = &mmu.hwreg.ppu;
+        let ppureg = &mmu.ppureg;
+
+        // Flags determine which of the two tilemaps and tiledata tables we use.
+        let is_tiledata_low = ppureg.tile_data_table;
+        let is_tilemap_high = ppureg.bg_tilemap;
 
         // Use the LCDC hardware register to determine which of the two tilemap spaces we are
         // utilizing. They both behave the same in all ways.
-        let tilemap_address = if ppureg.bg_tilemap {
-            TILEMAP_1
-        } else {
-            TILEMAP_0
-        };
+        let tilemap_address = if is_tilemap_high { 0x9C00 } else { 0x9800 };
 
         // Use the LCDC hardware register to determine which of the two tile data spaces in VRAM we
         // are utilizing. The upper tiledata table beginning at 0x8800 needs to be accessed
         // with a signed value, indexing on 0x9000.
-        let tiledata_base_address = if ppureg.tile_data_table {
-            TILEDATA_0
-        } else {
-            TILEDATA_1
-        };
+        let tiledata_base_address = if is_tiledata_low { 0x8000 } else { 0x8800 };
 
         // Scroll offsets.  The tile maps represent a 256x256 scene of pixels. We only want to
         // render a 160x144 viewport of it.
