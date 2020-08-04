@@ -30,6 +30,7 @@ macro_rules! create_flag {
     };
 }
 
+#[allow(dead_code)] // flag_n  flag_h
 impl MMU {
     create_flag!(flag_z, set_flag_z, 7);
     create_flag!(flag_n, set_flag_n, 6);

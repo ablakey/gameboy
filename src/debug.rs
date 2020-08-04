@@ -29,5 +29,5 @@ pub fn format_tilemap(data: &[u8]) -> String {
 pub fn dump_to_file(contents: String, filename: &str) {
     create_dir("/tmp/gameboy").ok();
     let mut file = File::create(format!("/tmp/gameboy/{}", filename)).unwrap();
-    write!(file, "{}", contents);
+    write!(file, "{}", contents).unwrap();
 }

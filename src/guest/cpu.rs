@@ -262,7 +262,7 @@ impl CPU {
                     let d8 = mmu.get_next_byte();
                     alu_cp(mmu, d8)
                 }
-                _ => self.panic_opcode(opcode, is_cbprefix, op_address, mmu),
+                _ => self.panic_opcode(opcode, is_cbprefix, op_address),
             }
         } else {
             match opcode {
@@ -271,7 +271,7 @@ impl CPU {
                 0x11 => mmu.c = alu_rl(mmu, c),
                 0x37 => mmu.a = alu_swap(mmu, a),
                 0x87 => mmu.a = alu_res(0, a),
-                _ => self.panic_opcode(opcode, is_cbprefix, op_address, mmu),
+                _ => self.panic_opcode(opcode, is_cbprefix, op_address),
             }
         }
 
@@ -285,7 +285,7 @@ impl CPU {
     }
 
     /// Debug function. Panic when an opcode is not handled.
-    fn panic_opcode(&self, opcode: u8, is_cbprefix: bool, operation_address: u16, mmu: &MMU) {
+    fn panic_opcode(&self, opcode: u8, is_cbprefix: bool, operation_address: u16) {
         let msg = format!(
             "{} {:#06x}",
             self.opcodes.get_opcode_repr(opcode, is_cbprefix),
