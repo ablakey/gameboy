@@ -21,8 +21,7 @@ pub struct MMU {
     pub ppureg: PpuRegisters,
     apureg: ApuRegisters,
     cartridge: Cartridge,
-    interrupts: Interrupts,
-    pub ime: bool,
+    pub interrupts: Interrupts,
     pub pc: u16,
     pub sp: u16,
     pub a: u8,
@@ -48,7 +47,6 @@ impl MMU {
             oam: [0; 0xA0],
             sram: [0; 0x2000],
             vram: [0; 0x2000],
-            ime: true,
             pc: 0,
             sp: 0, // Initialized by the software.
             a: 0,

@@ -29,7 +29,7 @@ impl CPU {
     /// Perform a single opcode step and return how many cycles that took.
     /// Return the number of m-cycles required to perform the operation. This will be used for
     /// regulating how fast the CPU is emulated at.
-    pub fn step(&self, mmu: &mut MMU) -> u8 {
+    pub fn do_opcode(&self, mmu: &mut MMU) -> u8 {
         let op_address = mmu.pc; // Hold onto operation address before mutating it, for debugging.
 
         let mut opcode = mmu.get_next_byte();
@@ -246,8 +246,8 @@ impl CPU {
                     mmu.set_af(addr);
                 }
                 0xF3 => {
-                    // TODO: understand IME better. Rboy does somthing special.
-                    mmu.ime = false;
+                    // Changes to IME are not instant, they happen _after_ the _next_ opcode.
+                    mmu.interrupts.disable_ime();
                 }
                 0xF5 => mmu.push_stack(af),
                 0xFA => {
@@ -255,8 +255,8 @@ impl CPU {
                     mmu.a = mmu.rb(address);
                 }
                 0xFB => {
-                    // TODO: understand IME better.
-                    mmu.ime = true;
+                    // Changes to IME are not instant, they happen _after_ the _next_ opcode.
+                    mmu.interrupts.enable_ime();
                 }
                 0xFE => {
                     let d8 = mmu.get_next_byte();
