@@ -75,7 +75,7 @@ impl Emulator {
         self.mmu.interrupts.tick_ime_timer();
 
         // Try to handle an interrupt. If none was handled, try to do an opcode if not halted.
-        match self.try_interrupt() {
+        match self.mmu.try_interrupt() {
             0 => {
                 if self.mmu.interrupts.is_halted {
                     1
@@ -85,10 +85,5 @@ impl Emulator {
             }
             n => n,
         }
-    }
-
-    /// TODO
-    fn try_interrupt(&mut self) -> u8 {
-        0
     }
 }

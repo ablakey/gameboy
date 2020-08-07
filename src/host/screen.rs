@@ -18,7 +18,7 @@ impl Screen {
 
         let window = video_subsys
             .window(
-                "title: Gameboy",
+                "Blakey's Gameboy",
                 (Self::DMG_WIDTH * scale_factor) as u32,
                 (Self::DMG_HEIGHT * scale_factor) as u32,
             )

@@ -42,6 +42,8 @@ impl PPU {
             // vblank. Otherwise go back to mode 2 and loop again.
             if mmu.ppureg.line == 143 {
                 mmu.ppureg.mode = 1;
+                // TODO: setting interrupt is more detailed than this.
+                mmu.interrupts.intf |= 1; // Set Vblank flag.
             } else {
                 mmu.ppureg.mode = 2;
             }

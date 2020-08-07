@@ -11,7 +11,7 @@ impl Cartridge {
         // Either load the cartridge or return blank data.
         let data = match cartridge_path {
             Some(path) => Self::load_cartridge_data(path),
-            None => [0; 0x8000],
+            None => [0xFF; 0x8000], // No cartridge, returns 0xFF
         };
 
         Self { data }

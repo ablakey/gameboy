@@ -9,14 +9,9 @@ use std::panic;
 fn main() {
     let args: Vec<String> = env::args().collect();
 
-    if args.len() < 2 {
-        println!("USAGE: {} <rom-file>", args[0]);
-        return;
-    }
+    let cartridge_path = if args.len() > 1 { Some(&args[1]) } else { None };
 
-    let cartridge_path = &args[1];
-
-    let mut emulator = Emulator::new(Some(cartridge_path)).unwrap();
+    let mut emulator = Emulator::new(cartridge_path).unwrap();
 
     let result = panic::catch_unwind(panic::AssertUnwindSafe(|| emulator.run_forever()));
 

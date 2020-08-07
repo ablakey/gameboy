@@ -77,9 +77,12 @@ impl CPU {
                     let d16 = mmu.get_next_word();
                     mmu.set_bc(d16);
                 }
+                0x03 => mmu.set_bc(bc.wrapping_add(1)),
                 0x04 => mmu.b = alu_inc(mmu, b),
                 0x05 => mmu.b = alu_dec(mmu, b),
                 0x06 => mmu.b = mmu.get_next_byte(),
+                0x09 => alu_add_16(mmu, bc),
+                0x0A => mmu.a = mmu.rb(bc),
                 0x0B => mmu.set_bc(bc.wrapping_sub(1)),
                 0x0C => mmu.c += 1,
                 0x0D => mmu.c = alu_dec(mmu, c),
@@ -146,6 +149,10 @@ impl CPU {
                     let new_hl = hl.wrapping_sub(1);
                     mmu.set_hl(new_hl); // Decrement.
                 }
+                0x34 => {
+                    let value = alu_inc(mmu, mmu.rb(hl));
+                    mmu.wb(hl, value);
+                }
                 0x35 => {
                     let value = alu_dec(mmu, mmu.rb(hl));
                     mmu.wb(hl, value);
@@ -154,15 +161,21 @@ impl CPU {
                     let d8 = mmu.get_next_byte();
                     mmu.wb(hl, d8);
                 }
+                0x3C => mmu.a = alu_inc(mmu, a),
                 0x3D => mmu.a = alu_dec(mmu, a),
                 0x3E => mmu.a = mmu.get_next_byte(),
+                0x4E => mmu.c = mmu.rb(hl),
+                0x46 => mmu.b = mmu.rb(hl),
                 0x47 => mmu.b = a,
                 0x4F => mmu.c = a,
                 0x56 => mmu.d = mmu.rb(hl),
                 0x57 => mmu.d = a,
+                0x60 => mmu.h = b,
                 0x5E => mmu.e = mmu.rb(hl),
                 0x5F => mmu.e = a,
                 0x67 => mmu.h = a,
+                0x69 => mmu.l = c,
+                0x6F => mmu.l = a,
                 0x77 => mmu.wb(hl, a),
                 0x78 => mmu.a = b,
                 0x79 => mmu.a = c,
@@ -170,6 +183,7 @@ impl CPU {
                 0x7C => mmu.a = h,
                 0x7D => mmu.a = l,
                 0x7E => mmu.a = mmu.rb(hl),
+                0x85 => alu_add(mmu, l),
                 0x86 => alu_add(mmu, mmu.rb(hl)),
                 0x87 => alu_add(mmu, a),
                 0x90 => alu_sub(mmu, b),
@@ -183,6 +197,12 @@ impl CPU {
                 0xBE => {
                     let value = mmu.rb(hl);
                     alu_cp(mmu, value);
+                }
+                0xC0 => {
+                    if !flag_z {
+                        mmu.pc = mmu.pop_stack();
+                        condition_met = true;
+                    }
                 }
                 0xC1 => {
                     let address = mmu.pop_stack();
@@ -214,6 +234,10 @@ impl CPU {
                     mmu.set_de(value);
                 }
                 0xD5 => mmu.push_stack(de),
+                0xD9 => {
+                    mmu.pc = mmu.pop_stack();
+                    mmu.interrupts.enable_ime(1); // RETI re-enables IME after this opcode.
+                }
                 0xE0 => {
                     let addr = mmu.get_next_byte();
                     mmu.wb(0xFF00 + addr as u16, a);
@@ -256,7 +280,7 @@ impl CPU {
                 }
                 0xFB => {
                     // Changes to IME are not instant, they happen _after_ the _next_ opcode.
-                    mmu.interrupts.enable_ime();
+                    mmu.interrupts.enable_ime(2);
                 }
                 0xFE => {
                     let d8 = mmu.get_next_byte();
@@ -266,6 +290,7 @@ impl CPU {
             }
         } else {
             match opcode {
+                0x27 => mmu.a = alu_sla(mmu, a),
                 0x5F => alu_bit(mmu, 3, a),
                 0x7C => alu_bit(mmu, 7, h),
                 0x11 => mmu.c = alu_rl(mmu, c),

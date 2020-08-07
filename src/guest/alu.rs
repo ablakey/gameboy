@@ -170,6 +170,18 @@ pub fn alu_res(bit: u8, value: u8) -> u8 {
     value & !(1 << bit)
 }
 
+/// Shift Left Arithmetic.
+/// This means to shift everything left by 1.  The MSB gets set on C (carry) and the LSB is 0.
+/// Flags: [Z 0 0 C]
+pub fn alu_sla(mmu: &mut MMU, value: u8) -> u8 {
+    let new_value = value << 1;
+    mmu.set_flag_z(new_value == 0);
+    mmu.set_flag_n(false);
+    mmu.set_flag_h(false);
+    mmu.set_flag_c(value >> 7 == 1);
+    new_value
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -372,5 +384,15 @@ mod tests {
         assert_eq!(alu_res(0, 0xFF), 0xFE);
         assert_eq!(alu_res(1, 0xFF), 0xFD);
         assert_eq!(alu_res(7, 0xFF), 0x7F);
+    }
+
+    #[test]
+    fn test_alu_sla() {
+        let mmu = &mut MMU::new(None);
+        assert_eq!(alu_sla(mmu, 0b10000001), 0b00000010);
+        assert_flags!(mmu, false, false, false, true);
+
+        assert_eq!(alu_sla(mmu, 0b10000000), 0);
+        assert_flags!(mmu, true, false, false, true);
     }
 }

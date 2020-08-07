@@ -15,6 +15,7 @@ use std::panic;
 pub struct MMU {
     hram: [u8; 0x7F],   // 127 bytes of "High RAM" (DMA accessible) aka Zero page.
     oam: [u8; 0xA0],    // 160 bytes of OAM RAM.
+    cram: [u8; 0x2000], // 8KB switchable cartridge RAM.
     sram: [u8; 0x2000], // 8KB (no GBC banking support).
     vram: [u8; 0x2000], // 8KB graphics RAM.
     bootrom: BootRom,
@@ -45,6 +46,7 @@ impl MMU {
             interrupts: Interrupts::new(),
             hram: [0; 0x7F],
             oam: [0; 0xA0],
+            cram: [0; 0x2000],
             sram: [0; 0x2000],
             vram: [0; 0x2000],
             pc: 0,
@@ -99,6 +101,7 @@ impl MMU {
         match address {
             0x0000..=0x7FFF => self.cartridge.wb(address, value),
             0x8000..=0x9FFF => self.vram[(address - 0x8000) as usize] = value,
+            0xA000..=0xBFFF => self.cram[(address - 0xA000) as usize] = value,
             0xC000..=0xDFFF => self.sram[(address - 0xC000) as usize] = value,
             0xFE00..=0xFE9F => self.oam[(address - 0xFE00) as usize] = value,
             0xFEA0..=0xFEFF => (),
@@ -111,11 +114,11 @@ impl MMU {
             0xFF07 => (), // TODO: Timer control.
             0xFF0F => self.interrupts.intf = value,
             0xFF10..=0xFF3F => self.apureg.wb(address, value),
-            0xFF46 => self.oam_dma(address),
+            0xFF46 => self.oam_dma(value),
             0xFF40..=0xFF4B => self.ppureg.wb(address, value),
             0xFF50 => self.bootrom.is_enabled = false,
-            0xFF7F => (), // tetris.gb off-by-one error.
             0xFF80..=0xFFFE => self.hram[(address - 0xFF80) as usize] = value,
+            0xFF7F => (), // tetris.gb off-by-one error.
             0xFFFF => self.interrupts.inte = value,
             _ => panic!("Tried to write to {:#x} which is not mapped.", address),
         }
@@ -170,12 +173,15 @@ impl MMU {
         address
     }
 
-    pub fn oam_dma(&mut self, _address: u16) {
-        // TODO: write 160 bytes from address -> OAM RAM.
-        // Assert that address is a multiple of 0x100  address % 0x100 == 0
-        // Write tests that set up some memory to be copied, performs a copy, and checks that it was
-        // copied. Can probably just set a byte at address and a byte at address + 159
-        panic!("DMA");
+    /// A very simple write of 160 bytes beginning at an address into OAM memory.
+    /// The value is actually the MSB of the address. From there we walk 160 bytes from it and
+    /// copy them to OAM.
+    pub fn oam_dma(&mut self, value: u8) {
+        let base = (value as u16) << 8;
+        for n in 0..0xA0 {
+            let byte = self.rb(base + n);
+            self.wb(0xFE00 + n, byte);
+        }
     }
 
     /// Panic with a given message, but also printout some debug info.
@@ -197,6 +203,25 @@ impl MMU {
         let tilemap1 = (0x9C00 - 0x8000) as usize;
         let tilemap0_dump = debug::format_tilemap(&self.vram[tilemap1..tilemap1 + 1024]);
         debug::dump_to_file(tilemap0_dump, "tilemap1");
+    }
+
+    /// Try to handle an interrupt and return the number of cycles it took.
+    /// Usually this is 0 cycles and no interrupt is handled.
+    pub fn try_interrupt(&mut self) -> u8 {
+        match self.interrupts.try_interrupt() {
+            None => 0,
+            Some(n) if n < 5 => {
+                // Addresses are 0x0040, 0x0048, 0x0050, 0x0058, 0x0060. By shifting by 3,
+                // We can append that multiple of 8 to 0x0040.
+                let address = 0x0040 + (n << 3) as u16;
+
+                self.push_stack(self.pc);
+                self.pc = address;
+
+                4 // All interupts take 4 cycles to jump to. The actual routine will be longer.
+            }
+            Some(n) => panic!("Handled invalid interrupt flag: {:#b}", n),
+        }
     }
 }
 
