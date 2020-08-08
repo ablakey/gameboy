@@ -122,6 +122,8 @@ pub fn alu_sbc(mmu: &mut MMU, value: u8) {
 /// Rotate bits left through carry.
 /// This means that we shift left, and the MSB becomes the LSB. Except "through carry" means
 /// We act as if the carry is part of that ring: MSB becomes carry, old carry becomes LSB.
+/// Flags: [Z 0 0 C]
+// Note: The mnemonic is weird.  RL is through carry. RLC is not.
 pub fn alu_rl(mmu: &mut MMU, value: u8) -> u8 {
     let new_value = value << 1 | mmu.flag_c() as u8;
     mmu.set_flag_z(new_value == 0);
@@ -180,6 +182,18 @@ pub fn alu_sla(mmu: &mut MMU, value: u8) -> u8 {
     mmu.set_flag_h(false);
     mmu.set_flag_c(value >> 7 == 1);
     new_value
+}
+
+/// Shift Right Logic.
+/// Flags: [Z 0 0 C]
+/// TODO: tests.
+pub fn alu_srl(mmu: &mut MMU, value: u8) -> u8 {
+    let new_value = value >> 1;
+    mmu.set_flag_z(new_value == 0);
+    mmu.set_flag_n(false);
+    mmu.set_flag_h(false);
+    mmu.set_flag_c(value & 0x1 == 0x1); // Far-right bit was high.
+    return new_value;
 }
 
 #[cfg(test)]

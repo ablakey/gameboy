@@ -126,6 +126,7 @@ impl CPU {
                 }
                 0x23 => mmu.set_hl(hl.wrapping_add(1)),
                 0x24 => mmu.h = alu_inc(mmu, h),
+                0x26 => mmu.h = mmu.get_next_byte(),
                 0x28 => {
                     let r8 = mmu.get_signed_byte() as u16;
                     if mmu.flag_z() {
@@ -346,7 +347,27 @@ impl CPU {
             }
         } else {
             match opcode {
+                0x11 => mmu.c = alu_rl(mmu, c),
                 0x27 => mmu.a = alu_sla(mmu, a),
+                0x30 => mmu.b = alu_swap(mmu, b),
+                0x31 => mmu.c = alu_swap(mmu, c),
+                0x32 => mmu.d = alu_swap(mmu, d),
+                0x33 => mmu.e = alu_swap(mmu, e),
+                0x34 => mmu.h = alu_swap(mmu, h),
+                0x35 => mmu.l = alu_swap(mmu, l),
+                0x36 => {
+                    let value = alu_swap(mmu, mmu.rb(hl));
+                    mmu.wb(hl, value);
+                }
+                0x37 => mmu.a = alu_swap(mmu, a),
+                0x3F => mmu.a = alu_srl(mmu, a),
+                0x40 => alu_bit(mmu, 0, b),
+                0x41 => alu_bit(mmu, 0, c),
+                0x42 => alu_bit(mmu, 0, d),
+                0x43 => alu_bit(mmu, 0, e),
+                0x44 => alu_bit(mmu, 0, h),
+                0x45 => alu_bit(mmu, 0, l),
+                0x47 => alu_bit(mmu, 0, a),
                 0x50 => alu_bit(mmu, 2, b),
                 0x51 => alu_bit(mmu, 2, c),
                 0x52 => alu_bit(mmu, 2, d),
@@ -387,6 +408,7 @@ impl CPU {
                 0x84 => mmu.b = alu_res(0, h),
                 0x85 => mmu.b = alu_res(0, l),
                 0x86 => mmu.wb(hl, alu_res(0, mmu.rb(hl))),
+                0x87 => mmu.a = alu_res(0, a),
                 0x88 => mmu.b = alu_res(1, b),
                 0x89 => mmu.b = alu_res(1, c),
                 0x8A => mmu.b = alu_res(1, d),
@@ -429,9 +451,7 @@ impl CPU {
                 0xBB => mmu.b = alu_res(7, e),
                 0xBC => mmu.b = alu_res(7, h),
                 0xBD => mmu.b = alu_res(7, l),
-                0x11 => mmu.c = alu_rl(mmu, c),
-                0x37 => mmu.a = alu_swap(mmu, a),
-                0x87 => mmu.a = alu_res(0, a),
+
                 _ => self.panic_opcode(opcode, is_cbprefix, op_address),
             }
         }
