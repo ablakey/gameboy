@@ -1,11 +1,15 @@
-use super::guest::{CPU, MMU, PPU};
+use super::guest::{Gamepad, CPU, MMU, PPU};
 use super::host::{Input, InputEvent, Screen};
 use sdl2;
 
 pub struct Emulator {
+    // Guest components.
     cpu: CPU,
     ppu: PPU,
     mmu: MMU,
+    gamepad: Gamepad,
+
+    // Host components.
     input: Input,
     screen: Screen,
 }
@@ -20,6 +24,8 @@ impl Emulator {
             cpu: CPU::new(),
             mmu: MMU::new(cartridge_path),
             ppu: PPU::new(),
+            gamepad: Gamepad::new(),
+
             input,
             screen,
         })
@@ -45,7 +51,15 @@ impl Emulator {
         let mut cycle_count: usize = 0;
         'frame: loop {
             // TODO: this loop will expand to step one line at a time through the CPU, PPU, APU.
+
+            // Update gamepad state.
+            let gamepad_state = self.input.get_gamepad_state();
+            self.gamepad.update_state(gamepad_state);
+
+            // CPU step.
             let cycles = self.step();
+
+            // PPU step.
             self.ppu.step(&mut self.mmu, cycles);
             cycle_count += cycles as usize;
 

@@ -13,14 +13,18 @@ use ppu::PpuRegisters;
 use std::panic;
 
 pub struct MMU {
-    hram: [u8; 0x7F],   // 127 bytes of "High RAM" (DMA accessible) aka Zero page.
-    oam: [u8; 0xA0],    // 160 bytes of OAM RAM.
+    hram: [u8; 0x7F], // 127 bytes of "High RAM" (DMA accessible) aka Zero page.
+    oam: [u8; 0xA0],  // 160 bytes of OAM RAM.
+
+    // TODO: belongs in MBC
     cram: [u8; 0x2000], // 8KB switchable cartridge RAM.
     sram: [u8; 0x2000], // 8KB (no GBC banking support).
     vram: [u8; 0x2000], // 8KB graphics RAM.
     bootrom: BootRom,
     pub ppureg: PpuRegisters,
     apureg: ApuRegisters,
+
+    // TODO: belongs in MBC
     cartridge: Cartridge,
     pub interrupts: Interrupts,
     pub pc: u16,
