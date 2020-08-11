@@ -32,6 +32,11 @@ impl Gamepad {
     pub fn update_state(&mut self, new_state: [bool; 8]) {
         self.button_state = Self::parse_row(&new_state[..4]);
         self.dpad_state = Self::parse_row(&new_state[4..]);
+
+        // TODO: interrupts when a button is pressed. Does it happen here or in `step`?
+        // If button state is selected, get state goint from high to low for each button.
+        // If any of them are true (button was pressed = high to low) then issue an IRQ.
+        // Material nonimplication:  a & !b;
     }
 
     /// On every frame, read the MMU register value (bits 5 and 6) and set bits 0-3 accordingly.

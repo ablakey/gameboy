@@ -1,6 +1,6 @@
 use super::opcode::OpCodes;
 
-use super::alu::*;
+use super::alu;
 use super::MMU;
 pub struct CPU {
     opcodes: OpCodes,
@@ -232,7 +232,13 @@ impl CPU {
                 0x9F => alu_sbc(mmu, a),
                 0xA1 => alu_and(mmu, c),
                 0xA7 => alu_and(mmu, a),
+                0xA8 => alu_xor(mmu, b),
                 0xA9 => alu_xor(mmu, c),
+                0xAA => alu_xor(mmu, d),
+                0xAB => alu_xor(mmu, e),
+                0xAC => alu_xor(mmu, h),
+                0xAD => alu_xor(mmu, l),
+                0xAE => alu_xor(mmu, mmu.rb(hl)),
                 0xAF => alu_xor(mmu, a),
                 0xB0 => alu_or(mmu, b),
                 0xB1 => alu_or(mmu, c),
@@ -309,6 +315,10 @@ impl CPU {
                 0xEA => {
                     let d8 = mmu.get_next_word();
                     mmu.wb(d8, a)
+                }
+                0xEE => {
+                    let value = mmu.get_next_byte();
+                    alu_xor(mmu, value);
                 }
                 0xEF => {
                     mmu.push_stack(mmu.pc);

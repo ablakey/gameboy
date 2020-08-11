@@ -54,7 +54,7 @@ impl MMU {
             cram: [0; 0x2000],
             sram: [0; 0x2000],
             vram: [0; 0x2000],
-            gamepad: 0,
+            gamepad: 0x2F, // Initialize with nothing pressed, bit 5 (buttons) selected.
             pc: 0,
             sp: 0, // Initialized by the software.
             a: 0,
