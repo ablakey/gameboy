@@ -52,7 +52,7 @@ impl Emulator {
 
         // Update gamepad input state. Do this at 60hz to save on CPU.
         let gamepad_state = self.input.get_gamepad_state();
-        self.gamepad.update_state(gamepad_state);
+        self.gamepad.update_state(mmu, gamepad_state);
 
         'frame: loop {
             // Gamepad step.

@@ -78,14 +78,15 @@ impl CPU {
                     mmu.set_bc(d16);
                 }
                 0x03 => mmu.set_bc(bc.wrapping_add(1)),
-                0x04 => mmu.b = alu_inc(mmu, b),
-                0x05 => mmu.b = alu_dec(mmu, b),
+                0x04 => mmu.b = alu::inc(mmu, b),
+                0x05 => mmu.b = alu::dec(mmu, b),
                 0x06 => mmu.b = mmu.get_next_byte(),
-                0x09 => alu_add_16(mmu, bc),
+                // 0x07 => alu::rlc,
+                0x09 => alu::add_16(mmu, bc),
                 0x0A => mmu.a = mmu.rb(bc),
                 0x0B => mmu.set_bc(bc.wrapping_sub(1)),
                 0x0C => mmu.c += 1,
-                0x0D => mmu.c = alu_dec(mmu, c),
+                0x0D => mmu.c = alu::dec(mmu, c),
                 0x0E => mmu.c = mmu.get_next_byte(),
                 0x11 => {
                     let d16 = mmu.get_next_word();
@@ -93,21 +94,21 @@ impl CPU {
                 }
                 0x12 => mmu.wb(de, a),
                 0x13 => mmu.set_de(de.wrapping_add(1)),
-                0x15 => mmu.d = alu_dec(mmu, d),
+                0x15 => mmu.d = alu::dec(mmu, d),
                 0x16 => mmu.d = mmu.get_next_byte(),
                 0x17 => {
                     // RLA is same as RL A but Z flag is unset.
-                    mmu.a = alu_rl(mmu, a);
+                    mmu.a = alu::rl(mmu, a);
                     mmu.set_flag_z(false);
                 }
                 0x18 => {
                     let r8 = mmu.get_signed_byte(); // Must get first as it mutates PC.
                     mmu.pc = mmu.pc.wrapping_add(r8 as u16);
                 }
-                0x19 => alu_add_16(mmu, de),
+                0x19 => alu::add_16(mmu, de),
                 0x1A => mmu.a = mmu.rb(de),
-                0x1C => mmu.e = alu_inc(mmu, e),
-                0x1D => mmu.e = alu_dec(mmu, e),
+                0x1C => mmu.e = alu::inc(mmu, e),
+                0x1D => mmu.e = alu::dec(mmu, e),
                 0x1E => mmu.e = mmu.get_next_byte(),
                 0x20 => {
                     let r8 = mmu.get_signed_byte(); // Need to get byte to inc PC either way.
@@ -125,7 +126,7 @@ impl CPU {
                     mmu.set_hl(hl.wrapping_add(1));
                 }
                 0x23 => mmu.set_hl(hl.wrapping_add(1)),
-                0x24 => mmu.h = alu_inc(mmu, h),
+                0x24 => mmu.h = alu::inc(mmu, h),
                 0x26 => mmu.h = mmu.get_next_byte(),
                 0x28 => {
                     let r8 = mmu.get_signed_byte() as u16;
@@ -138,10 +139,10 @@ impl CPU {
                     mmu.a = mmu.rb(hl);
                     mmu.set_hl(hl.wrapping_add(1));
                 }
-                0x2C => mmu.l = alu_inc(mmu, l),
-                0x2D => mmu.l = alu_dec(mmu, l),
+                0x2C => mmu.l = alu::inc(mmu, l),
+                0x2D => mmu.l = alu::dec(mmu, l),
                 0x2E => mmu.l = mmu.get_next_byte(),
-                0x2F => alu_cpl(mmu),
+                0x2F => alu::cpl(mmu),
                 0x31 => {
                     let w = mmu.get_next_word();
                     mmu.sp = w
@@ -152,11 +153,11 @@ impl CPU {
                     mmu.set_hl(new_hl); // Decrement.
                 }
                 0x34 => {
-                    let value = alu_inc(mmu, mmu.rb(hl));
+                    let value = alu::inc(mmu, mmu.rb(hl));
                     mmu.wb(hl, value);
                 }
                 0x35 => {
-                    let value = alu_dec(mmu, mmu.rb(hl));
+                    let value = alu::dec(mmu, mmu.rb(hl));
                     mmu.wb(hl, value);
                 }
                 0x36 => {
@@ -167,8 +168,8 @@ impl CPU {
                     mmu.a = mmu.rb(hl);
                     mmu.set_hl(hl.wrapping_sub(1));
                 }
-                0x3C => mmu.a = alu_inc(mmu, a),
-                0x3D => mmu.a = alu_dec(mmu, a),
+                0x3C => mmu.a = alu::inc(mmu, a),
+                0x3D => mmu.a = alu::dec(mmu, a),
                 0x3E => mmu.a = mmu.get_next_byte(),
                 0x40 => (), // LD B, B == NOP.
                 0x4E => mmu.c = mmu.rb(hl),
@@ -220,31 +221,31 @@ impl CPU {
                 0x7C => mmu.a = h,
                 0x7D => mmu.a = l,
                 0x7E => mmu.a = mmu.rb(hl),
-                0x80 => alu_add(mmu, b),
-                0x81 => alu_add(mmu, c),
-                0x82 => alu_add(mmu, d),
-                0x83 => alu_add(mmu, e),
-                0x84 => alu_add(mmu, h),
-                0x85 => alu_add(mmu, l),
-                0x86 => alu_add(mmu, mmu.rb(hl)),
-                0x87 => alu_add(mmu, a),
-                0x90 => alu_sub(mmu, b),
-                0x9F => alu_sbc(mmu, a),
-                0xA1 => alu_and(mmu, c),
-                0xA7 => alu_and(mmu, a),
-                0xA8 => alu_xor(mmu, b),
-                0xA9 => alu_xor(mmu, c),
-                0xAA => alu_xor(mmu, d),
-                0xAB => alu_xor(mmu, e),
-                0xAC => alu_xor(mmu, h),
-                0xAD => alu_xor(mmu, l),
-                0xAE => alu_xor(mmu, mmu.rb(hl)),
-                0xAF => alu_xor(mmu, a),
-                0xB0 => alu_or(mmu, b),
-                0xB1 => alu_or(mmu, c),
+                0x80 => alu::add(mmu, b),
+                0x81 => alu::add(mmu, c),
+                0x82 => alu::add(mmu, d),
+                0x83 => alu::add(mmu, e),
+                0x84 => alu::add(mmu, h),
+                0x85 => alu::add(mmu, l),
+                0x86 => alu::add(mmu, mmu.rb(hl)),
+                0x87 => alu::add(mmu, a),
+                0x90 => alu::sub(mmu, b),
+                0x9F => alu::sbc(mmu, a),
+                0xA1 => alu::and(mmu, c),
+                0xA7 => alu::and(mmu, a),
+                0xA8 => alu::xor(mmu, b),
+                0xA9 => alu::xor(mmu, c),
+                0xAA => alu::xor(mmu, d),
+                0xAB => alu::xor(mmu, e),
+                0xAC => alu::xor(mmu, h),
+                0xAD => alu::xor(mmu, l),
+                0xAE => alu::xor(mmu, mmu.rb(hl)),
+                0xAF => alu::xor(mmu, a),
+                0xB0 => alu::or(mmu, b),
+                0xB1 => alu::or(mmu, c),
                 0xBE => {
                     let value = mmu.rb(hl);
-                    alu_cp(mmu, value);
+                    alu::cp(mmu, value);
                 }
                 0xC0 => {
                     if !flag_z {
@@ -267,7 +268,7 @@ impl CPU {
                 0xC5 => mmu.push_stack(bc),
                 0xC6 => {
                     let value = mmu.get_next_byte();
-                    alu_add(mmu, value);
+                    alu::add(mmu, value);
                 }
                 0xC8 => {
                     if flag_z {
@@ -293,6 +294,10 @@ impl CPU {
                     mmu.set_de(value);
                 }
                 0xD5 => mmu.push_stack(de),
+                0xD6 => {
+                    let value = mmu.get_next_byte();
+                    alu::sub(mmu, value);
+                }
                 0xD9 => {
                     mmu.pc = mmu.pop_stack();
                     mmu.interrupts.enable_ime(1); // RETI re-enables IME after this opcode.
@@ -309,7 +314,7 @@ impl CPU {
                 0xE5 => mmu.push_stack(hl),
                 0xE6 => {
                     let d8 = mmu.get_next_byte();
-                    alu_and(mmu, d8);
+                    alu::and(mmu, d8);
                 }
                 0xE9 => mmu.pc = hl,
                 0xEA => {
@@ -318,7 +323,7 @@ impl CPU {
                 }
                 0xEE => {
                     let value = mmu.get_next_byte();
-                    alu_xor(mmu, value);
+                    alu::xor(mmu, value);
                 }
                 0xEF => {
                     mmu.push_stack(mmu.pc);
@@ -339,7 +344,7 @@ impl CPU {
                 0xF5 => mmu.push_stack(af),
                 0xF6 => {
                     let value = mmu.get_next_byte();
-                    alu_or(mmu, value);
+                    alu::or(mmu, value);
                 }
                 0xFA => {
                     let address = mmu.get_next_word();
@@ -351,116 +356,116 @@ impl CPU {
                 }
                 0xFE => {
                     let d8 = mmu.get_next_byte();
-                    alu_cp(mmu, d8)
+                    alu::cp(mmu, d8)
                 }
                 _ => self.panic_opcode(opcode, is_cbprefix, op_address),
             }
         } else {
             match opcode {
-                0x11 => mmu.c = alu_rl(mmu, c),
-                0x27 => mmu.a = alu_sla(mmu, a),
-                0x30 => mmu.b = alu_swap(mmu, b),
-                0x31 => mmu.c = alu_swap(mmu, c),
-                0x32 => mmu.d = alu_swap(mmu, d),
-                0x33 => mmu.e = alu_swap(mmu, e),
-                0x34 => mmu.h = alu_swap(mmu, h),
-                0x35 => mmu.l = alu_swap(mmu, l),
+                0x11 => mmu.c = alu::rl(mmu, c),
+                0x27 => mmu.a = alu::sla(mmu, a),
+                0x30 => mmu.b = alu::swap(mmu, b),
+                0x31 => mmu.c = alu::swap(mmu, c),
+                0x32 => mmu.d = alu::swap(mmu, d),
+                0x33 => mmu.e = alu::swap(mmu, e),
+                0x34 => mmu.h = alu::swap(mmu, h),
+                0x35 => mmu.l = alu::swap(mmu, l),
                 0x36 => {
-                    let value = alu_swap(mmu, mmu.rb(hl));
+                    let value = alu::swap(mmu, mmu.rb(hl));
                     mmu.wb(hl, value);
                 }
-                0x37 => mmu.a = alu_swap(mmu, a),
-                0x3F => mmu.a = alu_srl(mmu, a),
-                0x40 => alu_bit(mmu, 0, b),
-                0x41 => alu_bit(mmu, 0, c),
-                0x42 => alu_bit(mmu, 0, d),
-                0x43 => alu_bit(mmu, 0, e),
-                0x44 => alu_bit(mmu, 0, h),
-                0x45 => alu_bit(mmu, 0, l),
-                0x47 => alu_bit(mmu, 0, a),
-                0x50 => alu_bit(mmu, 2, b),
-                0x51 => alu_bit(mmu, 2, c),
-                0x52 => alu_bit(mmu, 2, d),
-                0x53 => alu_bit(mmu, 2, e),
-                0x54 => alu_bit(mmu, 2, h),
-                0x55 => alu_bit(mmu, 2, l),
-                0x58 => alu_bit(mmu, 3, b),
-                0x59 => alu_bit(mmu, 3, c),
-                0x5A => alu_bit(mmu, 3, d),
-                0x5B => alu_bit(mmu, 3, e),
-                0x5C => alu_bit(mmu, 3, h),
-                0x5D => alu_bit(mmu, 3, l),
-                0x60 => alu_bit(mmu, 4, b),
-                0x61 => alu_bit(mmu, 4, c),
-                0x62 => alu_bit(mmu, 4, d),
-                0x63 => alu_bit(mmu, 4, e),
-                0x64 => alu_bit(mmu, 4, h),
-                0x65 => alu_bit(mmu, 4, l),
-                0x68 => alu_bit(mmu, 5, b),
-                0x69 => alu_bit(mmu, 5, c),
-                0x6A => alu_bit(mmu, 5, d),
-                0x6B => alu_bit(mmu, 5, e),
-                0x6C => alu_bit(mmu, 5, h),
-                0x6D => alu_bit(mmu, 5, l),
-                0x5F => alu_bit(mmu, 3, a),
-                0x78 => alu_bit(mmu, 7, b),
-                0x79 => alu_bit(mmu, 7, c),
-                0x7A => alu_bit(mmu, 7, d),
-                0x7B => alu_bit(mmu, 7, e),
-                0x7C => alu_bit(mmu, 7, h),
-                0x7D => alu_bit(mmu, 7, l),
-                0x7E => alu_bit(mmu, 7, mmu.rb(hl)),
-                0x7F => alu_bit(mmu, 7, a),
-                0x80 => mmu.b = alu_res(0, b),
-                0x81 => mmu.b = alu_res(0, c),
-                0x82 => mmu.b = alu_res(0, d),
-                0x83 => mmu.b = alu_res(0, e),
-                0x84 => mmu.b = alu_res(0, h),
-                0x85 => mmu.b = alu_res(0, l),
-                0x86 => mmu.wb(hl, alu_res(0, mmu.rb(hl))),
-                0x87 => mmu.a = alu_res(0, a),
-                0x88 => mmu.b = alu_res(1, b),
-                0x89 => mmu.b = alu_res(1, c),
-                0x8A => mmu.b = alu_res(1, d),
-                0x8B => mmu.b = alu_res(1, e),
-                0x8C => mmu.b = alu_res(1, h),
-                0x8D => mmu.b = alu_res(1, l),
-                0x90 => mmu.b = alu_res(2, b),
-                0x91 => mmu.b = alu_res(2, c),
-                0x92 => mmu.b = alu_res(2, d),
-                0x93 => mmu.b = alu_res(2, e),
-                0x94 => mmu.b = alu_res(2, h),
-                0x95 => mmu.b = alu_res(2, l),
-                0x98 => mmu.b = alu_res(3, b),
-                0x99 => mmu.b = alu_res(3, c),
-                0x9A => mmu.b = alu_res(3, d),
-                0x9B => mmu.b = alu_res(3, e),
-                0x9C => mmu.b = alu_res(3, h),
-                0x9D => mmu.b = alu_res(3, l),
-                0xA0 => mmu.b = alu_res(4, b),
-                0xA1 => mmu.b = alu_res(4, c),
-                0xA2 => mmu.b = alu_res(4, d),
-                0xA3 => mmu.b = alu_res(4, e),
-                0xA4 => mmu.b = alu_res(4, h),
-                0xA5 => mmu.b = alu_res(4, l),
-                0xA8 => mmu.b = alu_res(5, b),
-                0xA9 => mmu.b = alu_res(5, c),
-                0xAA => mmu.b = alu_res(5, d),
-                0xAB => mmu.b = alu_res(5, e),
-                0xAC => mmu.b = alu_res(5, h),
-                0xAD => mmu.b = alu_res(5, l),
-                0xB0 => mmu.b = alu_res(6, b),
-                0xB1 => mmu.b = alu_res(6, c),
-                0xB2 => mmu.b = alu_res(6, d),
-                0xB3 => mmu.b = alu_res(6, e),
-                0xB4 => mmu.b = alu_res(6, h),
-                0xB5 => mmu.b = alu_res(6, l),
-                0xB8 => mmu.b = alu_res(7, b),
-                0xB9 => mmu.b = alu_res(7, c),
-                0xBA => mmu.b = alu_res(7, d),
-                0xBB => mmu.b = alu_res(7, e),
-                0xBC => mmu.b = alu_res(7, h),
-                0xBD => mmu.b = alu_res(7, l),
+                0x37 => mmu.a = alu::swap(mmu, a),
+                0x3F => mmu.a = alu::srl(mmu, a),
+                0x40 => alu::bit(mmu, 0, b),
+                0x41 => alu::bit(mmu, 0, c),
+                0x42 => alu::bit(mmu, 0, d),
+                0x43 => alu::bit(mmu, 0, e),
+                0x44 => alu::bit(mmu, 0, h),
+                0x45 => alu::bit(mmu, 0, l),
+                0x47 => alu::bit(mmu, 0, a),
+                0x50 => alu::bit(mmu, 2, b),
+                0x51 => alu::bit(mmu, 2, c),
+                0x52 => alu::bit(mmu, 2, d),
+                0x53 => alu::bit(mmu, 2, e),
+                0x54 => alu::bit(mmu, 2, h),
+                0x55 => alu::bit(mmu, 2, l),
+                0x58 => alu::bit(mmu, 3, b),
+                0x59 => alu::bit(mmu, 3, c),
+                0x5A => alu::bit(mmu, 3, d),
+                0x5B => alu::bit(mmu, 3, e),
+                0x5C => alu::bit(mmu, 3, h),
+                0x5D => alu::bit(mmu, 3, l),
+                0x60 => alu::bit(mmu, 4, b),
+                0x61 => alu::bit(mmu, 4, c),
+                0x62 => alu::bit(mmu, 4, d),
+                0x63 => alu::bit(mmu, 4, e),
+                0x64 => alu::bit(mmu, 4, h),
+                0x65 => alu::bit(mmu, 4, l),
+                0x68 => alu::bit(mmu, 5, b),
+                0x69 => alu::bit(mmu, 5, c),
+                0x6A => alu::bit(mmu, 5, d),
+                0x6B => alu::bit(mmu, 5, e),
+                0x6C => alu::bit(mmu, 5, h),
+                0x6D => alu::bit(mmu, 5, l),
+                0x5F => alu::bit(mmu, 3, a),
+                0x78 => alu::bit(mmu, 7, b),
+                0x79 => alu::bit(mmu, 7, c),
+                0x7A => alu::bit(mmu, 7, d),
+                0x7B => alu::bit(mmu, 7, e),
+                0x7C => alu::bit(mmu, 7, h),
+                0x7D => alu::bit(mmu, 7, l),
+                0x7E => alu::bit(mmu, 7, mmu.rb(hl)),
+                0x7F => alu::bit(mmu, 7, a),
+                0x80 => mmu.b = alu::res(0, b),
+                0x81 => mmu.b = alu::res(0, c),
+                0x82 => mmu.b = alu::res(0, d),
+                0x83 => mmu.b = alu::res(0, e),
+                0x84 => mmu.b = alu::res(0, h),
+                0x85 => mmu.b = alu::res(0, l),
+                0x86 => mmu.wb(hl, alu::res(0, mmu.rb(hl))),
+                0x87 => mmu.a = alu::res(0, a),
+                0x88 => mmu.b = alu::res(1, b),
+                0x89 => mmu.b = alu::res(1, c),
+                0x8A => mmu.b = alu::res(1, d),
+                0x8B => mmu.b = alu::res(1, e),
+                0x8C => mmu.b = alu::res(1, h),
+                0x8D => mmu.b = alu::res(1, l),
+                0x90 => mmu.b = alu::res(2, b),
+                0x91 => mmu.b = alu::res(2, c),
+                0x92 => mmu.b = alu::res(2, d),
+                0x93 => mmu.b = alu::res(2, e),
+                0x94 => mmu.b = alu::res(2, h),
+                0x95 => mmu.b = alu::res(2, l),
+                0x98 => mmu.b = alu::res(3, b),
+                0x99 => mmu.b = alu::res(3, c),
+                0x9A => mmu.b = alu::res(3, d),
+                0x9B => mmu.b = alu::res(3, e),
+                0x9C => mmu.b = alu::res(3, h),
+                0x9D => mmu.b = alu::res(3, l),
+                0xA0 => mmu.b = alu::res(4, b),
+                0xA1 => mmu.b = alu::res(4, c),
+                0xA2 => mmu.b = alu::res(4, d),
+                0xA3 => mmu.b = alu::res(4, e),
+                0xA4 => mmu.b = alu::res(4, h),
+                0xA5 => mmu.b = alu::res(4, l),
+                0xA8 => mmu.b = alu::res(5, b),
+                0xA9 => mmu.b = alu::res(5, c),
+                0xAA => mmu.b = alu::res(5, d),
+                0xAB => mmu.b = alu::res(5, e),
+                0xAC => mmu.b = alu::res(5, h),
+                0xAD => mmu.b = alu::res(5, l),
+                0xB0 => mmu.b = alu::res(6, b),
+                0xB1 => mmu.b = alu::res(6, c),
+                0xB2 => mmu.b = alu::res(6, d),
+                0xB3 => mmu.b = alu::res(6, e),
+                0xB4 => mmu.b = alu::res(6, h),
+                0xB5 => mmu.b = alu::res(6, l),
+                0xB8 => mmu.b = alu::res(7, b),
+                0xB9 => mmu.b = alu::res(7, c),
+                0xBA => mmu.b = alu::res(7, d),
+                0xBB => mmu.b = alu::res(7, e),
+                0xBC => mmu.b = alu::res(7, h),
+                0xBD => mmu.b = alu::res(7, l),
 
                 _ => self.panic_opcode(opcode, is_cbprefix, op_address),
             }
