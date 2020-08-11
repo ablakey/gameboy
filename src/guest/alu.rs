@@ -133,6 +133,18 @@ pub fn rl(mmu: &mut MMU, value: u8) -> u8 {
     new_value
 }
 
+/// Rotate bits left.
+/// Flags: [Z 0 0 C]
+pub fn rlc(mmu: &mut MMU, value: u8) -> u8 {
+    let has_carry = value & 0x80 == 0x80;
+    let new_value = value << 1 | has_carry as u8;
+    mmu.set_flag_z(new_value == 0);
+    mmu.set_flag_h(false);
+    mmu.set_flag_n(false);
+    mmu.set_flag_c(has_carry); // If the value's MSB is 1, there's a carry.
+    new_value
+}
+
 /// Subtract value from A and update registers. Do not change A. This is used as a way to compare
 /// values, given the flags change, a program can then look at the flags (usually Z) to see
 /// if the result was zero or not.
@@ -172,6 +184,13 @@ pub fn res(bit: u8, value: u8) -> u8 {
     value & !(1 << bit)
 }
 
+/// SEt bit in input value. For example, if value was register A of 0x00 and we set bit 0, the
+/// resulting value would be 0x01.
+/// Flags: [- - - -]
+pub fn set(bit: u8, value: u8) -> u8 {
+    value | (1 << bit)
+}
+
 /// Shift Left Arithmetic.
 /// This means to shift everything left by 1.  The MSB gets set on C (carry) and the LSB is 0.
 /// Flags: [Z 0 0 C]
@@ -194,6 +213,66 @@ pub fn srl(mmu: &mut MMU, value: u8) -> u8 {
     mmu.set_flag_h(false);
     mmu.set_flag_c(value & 0x1 == 0x1); // Far-right bit was high.
     return new_value;
+}
+
+/// Add value plus carry flag to A.
+/// Almost the same as alu::add. Duplicated it here to keep both simple for learning purposes.
+/// Flags: [Z 0 H C]
+pub fn adc(mmu: &mut MMU, value: u8) {
+    let value_with_carry = value.wrapping_add(mmu.flag_c() as u8);
+    let (new_a, overflow) = mmu.a.overflowing_add(value_with_carry);
+    mmu.set_flag_z(new_a == 0);
+    mmu.set_flag_n(false);
+    mmu.set_flag_h((mmu.a & 0xF) + (value & 0xF) > 0xF);
+    mmu.set_flag_c(overflow);
+    mmu.a = new_a;
+}
+
+/// Decimal Adjust Accumulator
+/// I've implemented this fairly verbosely to make it more clear to walk through. This one stuck
+/// me for a while. I borrowed inspiration from rboy as well as some Googling that showed C and C#
+/// implementations. Make sure you understand Binary-Coded Decimal (BCD).
+///
+/// Note that I mean "BCD carry" as in a nibble, which can represent 0-15 is representing
+/// A BCD value of greater than 9, the value is wrong and needs to be adjusted. This is the core
+/// concept of this operation.
+///
+/// Flags: [Z - 0 C]
+/// TODO: tests
+pub fn daa(mmu: &mut MMU) {
+    let subtract = mmu.flag_n();
+    let carry = mmu.flag_c();
+    let halfcarry = mmu.flag_h();
+
+    // Last operation was a subtraction.
+    // subtract 6 from both nibbles if carry or half-carry 0x60 to the top-half).
+    if subtract {
+        if carry {
+            mmu.a = mmu.a.wrapping_sub(0x60);
+        }
+        if halfcarry {
+            mmu.a = mmu.a.wrapping_sub(0x6);
+        }
+    // Last operation was an addition.
+    // Add 6 to both nibbles if carry or half-carry 0x60 to the top-half).
+    } else {
+        // If there was an arithmetic carry, or there already is a BCD carry...
+        // 0x99 is a 9 in both nibbles. Adjusting BCD positively would make 99 -> 100 or more.
+        if carry || mmu.a > 0x99 {
+            mmu.a = mmu.a.wrapping_add(0x60);
+            mmu.set_flag_c(true);
+        }
+
+        // If there was an arithmetic half-carry or if there is already a BCD carry...
+        // We mask the smaller nibble and see if it's greater than 9.
+        if halfcarry || (mmu.a & 0x0F) > 0x09 {
+            mmu.a = mmu.a.wrapping_add(0x6);
+        }
+    }
+
+    mmu.set_flag_z(mmu.a == 0);
+    mmu.set_flag_h(false);
+    // mmu.set_flag_c(tru);
 }
 
 #[cfg(test)]
@@ -401,6 +480,13 @@ mod tests {
     }
 
     #[test]
+    fn test_set() {
+        assert_eq!(set(0, 0x00), 0x01);
+        assert_eq!(set(1, 0x00), 0x02);
+        assert_eq!(set(7, 0xFF), 0xFF);
+    }
+
+    #[test]
     fn test_sla() {
         let mmu = &mut MMU::new(None);
         assert_eq!(sla(mmu, 0b10000001), 0b00000010);
@@ -408,5 +494,25 @@ mod tests {
 
         assert_eq!(sla(mmu, 0b10000000), 0);
         assert_flags!(mmu, true, false, false, true);
+    }
+
+    #[test]
+    fn test_rlc() {
+        let mmu = &mut MMU::new(None);
+        let result = rlc(mmu, 0b10000001);
+
+        // MSB becomes carry (c=true), LSB is 0 (carry was false). Shift left.
+        assert_eq!(result, 0b00000011);
+        assert_flags!(mmu, false, false, false, true);
+    }
+
+    #[test]
+    fn test_adc() {
+        let mmu = &mut MMU::new(None);
+        mmu.set_flag_c(true);
+        mmu.a = 0xFF;
+        adc(mmu, 0xFF);
+        assert_eq!(mmu.a, 0xFF);
+        assert_flags!(mmu, false, false, true, false);
     }
 }
