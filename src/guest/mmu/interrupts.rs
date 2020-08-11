@@ -1,14 +1,12 @@
 pub struct Interrupts {
-    // inte are the interrupt enable flags while intf are the interrupt flags.
-    // inte describes if the interrupts are even active.
-    // intf describes if the interrupts have been triggered.
+    // Both `inte` and `intf` have the same meaning for bits 0-4.  Bits 5-7 are unused.
     // Bit 4: Gamepad high to low
     // Bit 3: Serial I/O transfer complete
     // Bit 2: Timer Overflow
     // Bit 1: LCDC
     // Bit 0: V-Blank
-    pub inte: u8, // 0xFFFF
-    pub intf: u8, // 0xFF0F
+    pub inte: u8, // Address 0xFFFF. Interrupt Enable Switches (is the interrupt enabled?)
+    pub intf: u8, // Address 0xFF0F. Interrupt Flags (is the interrupt triggered?)
     pub is_halted: bool,
 
     // Interrupt Master Enable. Modified via  EI and DI ops, not accessible by address.

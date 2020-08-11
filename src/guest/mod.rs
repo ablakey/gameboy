@@ -1,6 +1,6 @@
 mod alu;
 mod cpu;
-mod gamepad;
+pub mod gamepad;
 mod mmu;
 mod opcode;
 mod ppu;

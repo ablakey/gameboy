@@ -1,13 +1,15 @@
+use super::mmu::MMU;
+
 pub struct Gamepad {
-    row_0: u8, // Only bits 0-3 are used.
-    row_1: u8, // Only bits 0-3 are used.
+    button_state: u8, // P15
+    dpad_state: u8,   // P14
 }
 
 impl Gamepad {
     pub fn new() -> Self {
         Self {
-            row_0: 0x0F,
-            row_1: 0x0F,
+            button_state: 0xF,
+            dpad_state: 0xF,
         }
     }
 
@@ -24,10 +26,27 @@ impl Gamepad {
     }
 
     /// Update the gamepad's state given the provided state of all 8 keys.
-    /// The array of booleans represents state in order:
-    /// [Right, Left, Up, Down, A, B, Select, Start]
+    /// The array of booleans represents state in order [Right, Left, Up, Down, A, B, Select, Start]
+    /// This function is to be called enough to make the input feel crisp but not on every frame.
+    /// 60fps is probably a good and simple target.
     pub fn update_state(&mut self, new_state: [bool; 8]) {
-        self.row_0 = Self::parse_row(&new_state[..4]);
-        self.row_1 = Self::parse_row(&new_state[4..]);
+        self.button_state = Self::parse_row(&new_state[..4]);
+        self.dpad_state = Self::parse_row(&new_state[4..]);
+    }
+
+    /// On every frame, read the MMU register value (bits 5 and 6) and set bits 0-3 accordingly.
+    pub fn step(&self, mmu: &mut MMU) {
+        let read_buttons = mmu.gamepad & 0x20;
+        let read_dpad = mmu.gamepad & 0x10;
+
+        // Should never be trying to read both or neither.
+        assert_ne!(read_buttons, read_dpad);
+
+        // A `0` in bits 4 or 5 represent "selected".
+        mmu.gamepad |= if read_buttons == 0 {
+            self.button_state
+        } else {
+            self.dpad_state
+        }
     }
 }

@@ -465,6 +465,28 @@ impl CPU {
         cycles
     }
 
+    /// Step the emulation forward one unit. A unit can be a different length in cycles depending
+    /// on what is done. Generally this is three things:
+    /// 1. Perform an opcode instruction.
+    /// 2. Handle an interrupt, jumping to an interrupt address.
+    /// 3. Do nothing because the CPU is halted.
+    pub fn step(&self, mmu: &mut MMU) -> u8 {
+        // If EI or DI was called, tick down the delay and possibly modify IME.
+        mmu.interrupts.tick_ime_timer();
+
+        // Try to handle an interrupt. If none was handled, try to do an opcode if not halted.
+        match mmu.try_interrupt() {
+            0 => {
+                if mmu.interrupts.is_halted {
+                    1
+                } else {
+                    self.do_opcode(mmu)
+                }
+            }
+            n => n,
+        }
+    }
+
     /// Debug function. Panic when an opcode is not handled.
     fn panic_opcode(&self, opcode: u8, is_cbprefix: bool, operation_address: u16) {
         let msg = format!(

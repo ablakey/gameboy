@@ -1,8 +1,9 @@
+use super::mmu::MMU;
+
 pub struct PPU {
     modeclock: usize, // Current clock step representing where the PPU is in its processing cycle.
     pub image_buffer: [u8; 160 * 144],
 }
-use super::mmu::MMU;
 
 /// Convert a tile data offset t
 fn get_tile_data_address(base_address: u16, tile_number: u8) -> u16 {

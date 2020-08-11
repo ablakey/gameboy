@@ -26,6 +26,7 @@ pub struct MMU {
 
     // TODO: belongs in MBC
     cartridge: Cartridge,
+    pub gamepad: u8,
     pub interrupts: Interrupts,
     pub pc: u16,
     pub sp: u16,
@@ -53,6 +54,7 @@ impl MMU {
             cram: [0; 0x2000],
             sram: [0; 0x2000],
             vram: [0; 0x2000],
+            gamepad: 0,
             pc: 0,
             sp: 0, // Initialized by the software.
             a: 0,
@@ -81,14 +83,14 @@ impl MMU {
             0xC000..=0xDFFF => self.sram[(address - 0xC000) as usize],
             0xFE00..=0xFE9F => self.oam[(address - 0xFE00) as usize],
             0xFEA0..=0xFEFF => 0xFF,
-            0xFF00 => 0xFF, // TODO: gamepad.
-            0xFF01 => 0,    // TODO: serial write.
-            0xFF02 => 0,    // TODO: serial control.
-            0xFF04 => 0,    // TODO: Divider timer register.
-            0xFF05 => 0,    // TODO: Timer Counter.
-            0xFF06 => 0,    // TODO: Timer Modulo.
-            0xFF07 => 0,    // TODO: Timer control.
-            0xFF0F => 0,    // TODO: Interrupt Flag (IF)
+            0xFF00 => self.gamepad,
+            0xFF01 => 0, // TODO: serial write.
+            0xFF02 => 0, // TODO: serial control.
+            0xFF04 => 0, // TODO: Divider timer register.
+            0xFF05 => 0, // TODO: Timer Counter.
+            0xFF06 => 0, // TODO: Timer Modulo.
+            0xFF07 => 0, // TODO: Timer control.
+            0xFF0F => 0, // TODO: Interrupt Flag (IF)
             0xFF10..=0xFF3F => self.apureg.rb(address),
             0xFF46 => panic!("0xff46: OAM DMA cannot be read from."),
             0xFF40..=0xFF4B => self.ppureg.rb(address),
@@ -109,7 +111,7 @@ impl MMU {
             0xC000..=0xDFFF => self.sram[(address - 0xC000) as usize] = value,
             0xFE00..=0xFE9F => self.oam[(address - 0xFE00) as usize] = value,
             0xFEA0..=0xFEFF => (),
-            0xFF00 => (), // TODO: gamepad.
+            0xFF00 => self.gamepad = value,
             0xFF01 => (), // TODO: serial write.
             0xFF02 => (), // TODO: serial control.
             0xFF04 => (), // TODO: Divider timer register.
