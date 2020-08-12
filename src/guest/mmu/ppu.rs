@@ -3,8 +3,8 @@ pub struct PpuRegisters {
     pub scx: u8,                // 0xFF43: scroll X background.
     pub line: u8,               // 0xFF44: vertical line data is transferred to. 0-153.
     pub background_palette: u8, // 0xFF47: background & window palette details.
-    pub obj_palette_0: u8,      // 0xFF48: OBP0 palette data.
-    pub obj_palette_1: u8,      // 0xFF49: OBP1 palette data.
+    pub obj_palette_0: u8,      // 0xFF48: OBP0 palette data (sprites).
+    pub obj_palette_1: u8,      // 0xFF49: OBP1 palette data (sprites).
     pub win_x: u8,              // 0xFF4A: Window x position.
     pub win_y: u8,              // 0xFF4B: Window y position.
     pub lyc: u8,

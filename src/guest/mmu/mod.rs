@@ -21,8 +21,8 @@ pub struct MMU {
     sram: [u8; 0x2000], // 8KB (no GBC banking support).
     vram: [u8; 0x2000], // 8KB graphics RAM.
     bootrom: BootRom,
-    pub ppureg: PpuRegisters,
-    apureg: ApuRegisters,
+    pub ppu_reg: PpuRegisters,
+    apu_reg: ApuRegisters,
 
     // TODO: belongs in MBC
     cartridge: Cartridge,
@@ -46,8 +46,8 @@ impl MMU {
         Self {
             bootrom: BootRom::new(),
             cartridge: Cartridge::new(cartridge_path),
-            ppureg: PpuRegisters::new(),
-            apureg: ApuRegisters::new(),
+            ppu_reg: PpuRegisters::new(),
+            apu_reg: ApuRegisters::new(),
             interrupts: Interrupts::new(),
             hram: [0; 0x7F],
             oam: [0; 0xA0],
@@ -91,9 +91,9 @@ impl MMU {
             0xFF06 => 0, // TODO: Timer Modulo.
             0xFF07 => 0, // TODO: Timer control.
             0xFF0F => 0, // TODO: Interrupt Flag (IF)
-            0xFF10..=0xFF3F => self.apureg.rb(address),
+            0xFF10..=0xFF3F => self.apu_reg.rb(address),
             0xFF46 => panic!("0xff46: OAM DMA cannot be read from."),
-            0xFF40..=0xFF4B => self.ppureg.rb(address),
+            0xFF40..=0xFF4B => self.ppu_reg.rb(address),
             0xFF80..=0xFFFE => self.hram[(address - 0xFF80) as usize],
             0xFFFF => self.interrupts.inte,
             _ => {
@@ -119,9 +119,9 @@ impl MMU {
             0xFF06 => (), // TODO: Timer Modulo.
             0xFF07 => (), // TODO: Timer control.
             0xFF0F => self.interrupts.intf = value,
-            0xFF10..=0xFF3F => self.apureg.wb(address, value),
+            0xFF10..=0xFF3F => self.apu_reg.wb(address, value),
             0xFF46 => self.oam_dma(value),
-            0xFF40..=0xFF4B => self.ppureg.wb(address, value),
+            0xFF40..=0xFF4B => self.ppu_reg.wb(address, value),
             0xFF50 => self.bootrom.is_enabled = false,
             0xFF80..=0xFFFE => self.hram[(address - 0xFF80) as usize] = value,
             0xFF7F => (), // tetris.gb off-by-one error.

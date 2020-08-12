@@ -14,6 +14,22 @@ fn get_tile_data_address(base_address: u16, tile_number: u8) -> u16 {
     }
 }
 
+/// Return one of the four possible colour values for the given pixel data and number.
+fn get_pixel_color_value(tile_lower: u8, tile_upper: u8, palette: u8, pixel_num: u8) -> u8 {
+    // Get the two bits that describe this pixel's colour.  A row of 8 pixels are described
+    // by two consecutive bytes. The bits however are not consecutive. The first pixel value
+    // is described by the most-significant bit of each byte and so forth.
+    let p0 = (tile_lower >> (7 - pixel_num)) & 0x1;
+    let p1 = (tile_upper >> (7 - pixel_num)) & 0x1;
+    let pixel_value = (p1 << 1) + p0;
+
+    // Get the palette value for this pixel value.
+    // Multiply by 2 because hwreg.background_palette is 4  2-bit values. To get the
+    // color_value for pixel 00 -> 00,   01 -> 02,  02 -> 04,  03 -> 06.  Mask by 0b11
+    // because the color value is two bits.
+    (palette >> (pixel_value * 2)) & 0x3
+}
+
 impl PPU {
     pub fn new() -> Self {
         Self {
@@ -24,7 +40,7 @@ impl PPU {
 
     /// TODO: explain the mode cycle and clocks.
     pub fn step(&mut self, mmu: &mut MMU, cycles: u8) {
-        let mode = mmu.ppureg.mode;
+        let mode = mmu.ppu_reg.mode;
 
         // Increase the clock by number of cycles being emulated. This will govern what needs
         // to happen next such as changing modes. It is possible that we exceed the number of
@@ -37,16 +53,16 @@ impl PPU {
         // Transition: Mode 1 (VBlank) or Mode 2 (OAM Read)
         if mode == 0 && self.modeclock >= 204 {
             self.modeclock -= 204;
-            mmu.ppureg.line += 1; // Advance 1 line as we're in hblank.
+            mmu.ppu_reg.line += 1; // Advance 1 line as we're in hblank.
 
             // At the end of hblank, if on line 143, we've drawn all 144 lines and need to enter
             // vblank. Otherwise go back to mode 2 and loop again.
-            if mmu.ppureg.line == 143 {
-                mmu.ppureg.mode = 1;
+            if mmu.ppu_reg.line == 143 {
+                mmu.ppu_reg.mode = 1;
                 // TODO: setting interrupt is more detailed than this.
                 mmu.interrupts.intf |= 1; // Set Vblank flag.
             } else {
-                mmu.ppureg.mode = 2;
+                mmu.ppu_reg.mode = 2;
             }
         }
 
@@ -56,11 +72,11 @@ impl PPU {
         if mode == 1 && self.modeclock >= 456 {
             self.modeclock -= 456;
 
-            if mmu.ppureg.line == 153 {
-                mmu.ppureg.mode = 2;
-                mmu.ppureg.line = 0;
+            if mmu.ppu_reg.line == 153 {
+                mmu.ppu_reg.mode = 2;
+                mmu.ppu_reg.line = 0;
             } else {
-                mmu.ppureg.line += 1;
+                mmu.ppu_reg.line += 1;
             }
         }
 
@@ -70,34 +86,112 @@ impl PPU {
         // in sync. When OAM is needed, it will be read at what's effectively instantaneous speed.
         if mode == 2 && self.modeclock >= 80 {
             self.modeclock -= 80;
-            mmu.ppureg.mode = 3;
+            mmu.ppu_reg.mode = 3;
             return;
         }
 
         // VRAM read mode. End of mode 3 acts as end of scanline.
         if mode == 3 && self.modeclock >= 172 {
             self.modeclock -= 172;
-            mmu.ppureg.mode = 0;
+            mmu.ppu_reg.mode = 0;
             self.draw_scanline(mmu);
             return;
         }
     }
 
     fn draw_scanline(&mut self, mmu: &MMU) {
-        if !mmu.ppureg.lcd_on {
+        if !mmu.ppu_reg.lcd_on {
             return;
         }
 
         self.draw_background_scanline(mmu);
+        self.draw_sprites_scanline(mmu);
     }
 
-    /// Draw a single scanline by iterating through a line of pixels and getting pixel data.
+    /// Modify the current line's buffer with sprite data. Sprite pixels may not draw depending on
+    /// OAM settings governing if the sprite is in front of or behind the background.
+    /// It's easier to work with `isize` values because we're dealing with a mapping space that
+    /// can have negative values (off screen sprites).
+    fn draw_sprites_scanline(&mut self, mmu: &MMU) {
+        let ppu_reg = &mmu.ppu_reg;
+        let line = ppu_reg.line as isize;
+        let sprite_y_size = if ppu_reg.sprite_size { 16 } else { 8 } as isize;
+
+        if !ppu_reg.sprite_on {
+            return;
+        };
+
+        // Walk through all 40 sprites in OAM memory. We need to draw the ones whose coordinates
+        // put them within the viewframe.
+        for s in 0..40 {
+            // Gather the facts for this sprite.
+            let oam_address = 0xFE00 + s * 4;
+            let y_coord = mmu.rb(oam_address) as isize - 16; // Stored with built-in offsets.
+            let x_coord = mmu.rb(oam_address + 1) as isize - 8; // Stored with built-in offsets.
+            let sprite_number = mmu.rb(oam_address + 2) as u16;
+            let options = mmu.rb(oam_address + 3);
+            let bg_priority = options & 0x80 != 0;
+            let y_flip = options & 0x40 != 0;
+            let x_flip = options & 0x20 != 0;
+            let palette = if options & 0x10 != 0 {
+                ppu_reg.obj_palette_0
+            } else {
+                ppu_reg.obj_palette_1
+            };
+
+            // Is the sprite not on this line?
+            if line < y_coord || line >= y_coord + sprite_y_size {
+                continue;
+            }
+
+            // Is the sprite off the left or right of the screen?
+            if x_coord < -7 || x_coord >= 160 {
+                continue;
+            }
+
+            // Get the sprite's y coordinate
+            // The result is that sprite_y is 0-7 or 0-15.  This means that we're addressing
+            // consecutive sprite addresses if it's a double-tall sprite. We know the sprite is
+            // relevant, so within 0-7 or 0-15 because we skip any that aren't above. This leaves
+            // us being able to subtract the y-coordinate of the sprite with the current line we're
+            // drawing to get the line of the sprite being drawn.
+            // TODO: flip-y
+            let sprite_y = (line - y_coord) as u16;
+
+            // Determine data address of not just the sprite, but the specific line of the sprite.
+            // Each sprite is 15 bytes, so jump by multiples of 16.  Each row (8 total) are 2 bytes
+            // So jump by 2.
+            let sprite_data_address = 0x8000 + sprite_number * 16 + sprite_y * 2;
+
+            // Get the sprite data (2 bytes, combined makes a row of 8 pixels).
+            let sprite_data_lower = mmu.rb(sprite_data_address);
+            let sprite_data_upper = mmu.rb(sprite_data_address + 1);
+
+            // Walk through each pixel to be drawn.
+            for p in 0..8u8 {
+                // Is this specific pixel not on the screen?
+                if x_coord + (p as isize) < 0 || x_coord + (p as isize) >= 160 {
+                    continue;
+                }
+
+                let color_value =
+                    get_pixel_color_value(sprite_data_lower, sprite_data_upper, palette, p);
+
+                self.image_buffer[line as usize * 160 + x_coord as usize + p as usize] =
+                    color_value;
+            }
+        }
+    }
+
+    /// Draw a single scanline by iterating through a line of pixels and getting pixel data from
+    /// the relevant tiles. Only a subset of the 256x256 scene is displayed, so we are not always
+    /// drawing complete tiles. There's also wrap-around possible.
     fn draw_background_scanline(&mut self, mmu: &MMU) {
-        let ppureg = &mmu.ppureg;
+        let ppu_reg = &mmu.ppu_reg;
 
         // Flags determine which of the two tilemaps and tiledata tables we use.
-        let is_tiledata_low = ppureg.tile_data_table;
-        let is_tilemap_high = ppureg.bg_tilemap;
+        let is_tiledata_low = ppu_reg.tile_data_table;
+        let is_tilemap_high = ppu_reg.bg_tilemap;
 
         // Use the LCDC hardware register to determine which of the two tilemap spaces we are
         // utilizing. They both behave the same in all ways.
@@ -110,8 +204,8 @@ impl PPU {
 
         // Scroll offsets.  The tile maps represent a 256x256 scene of pixels. We only want to
         // render a 160x144 viewport of it.
-        let scy = ppureg.scy;
-        let scx = ppureg.scx;
+        let scy = ppu_reg.scy;
+        let scx = ppu_reg.scx;
 
         // We want to iterate through 160 pixels to draw one scanline.
         for x in 0..160u8 {
@@ -119,7 +213,7 @@ impl PPU {
             // register values. This accounts for the viewport we want to draw not being the same
             // as the 256x256 tilemap scene.
             let x = x.wrapping_add(scx);
-            let y = ppureg.line.wrapping_add(scy);
+            let y = ppu_reg.line.wrapping_add(scy);
 
             // There are 1024 tiles mapped in a 32x32 grid of 8x8 pixel tiles. The 1024 tiles are
             // described in one of the two tile maps as a row-major array. To get the tile number
@@ -148,22 +242,16 @@ impl PPU {
             let tile_data_lower = mmu.rb(tile_row_index);
             let tile_data_upper = mmu.rb(tile_row_index + 1);
 
-            // Get the two bits that describe this pixel's colour.  A row of 8 pixels are described
-            // by two consecutive bytes. The bits however are not consecutive. The first pixel value
-            // is described by the most-significant bit of each byte and so forth.
-            let p0 = (tile_data_lower >> (7 - pixel_col_num)) & 0x1;
-            let p1 = (tile_data_upper >> (7 - pixel_col_num)) & 0x1;
-            let pixel_value = (p1 << 1) + p0;
-
-            // Get the palette value for this pixel value.
-            // Multiply by 2 because hwreg.background_palette is 4  2-bit values. To get the
-            // color_value for pixel 00 -> 00,   01 -> 02,  02 -> 04,  03 -> 06.  Mask by 0b11
-            // because the color value is two bits.
-            let color_value = (ppureg.background_palette >> (pixel_value * 2)) & 0x3;
+            let color_value = get_pixel_color_value(
+                tile_data_lower,
+                tile_data_upper,
+                ppu_reg.background_palette,
+                pixel_col_num,
+            );
 
             // Update the image buffer with this pixel value. Given a well-behaved main loop should
             // iterate through every pixel, there is no need to clear the previous buffer data.
-            self.image_buffer[ppureg.line as usize * 160 + x as usize] = color_value;
+            self.image_buffer[ppu_reg.line as usize * 160 + x as usize] = color_value;
         }
     }
 }
