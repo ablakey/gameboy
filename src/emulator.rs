@@ -1,5 +1,6 @@
-use super::guest::{Gamepad, CPU, MMU, PPU};
-use super::host::{Input, InputEvent, Screen};
+use crate::guest::systems::{Gamepad, CPU, PPU};
+use crate::guest::MMU;
+use crate::host::{Input, InputEvent, Screen};
 use sdl2;
 
 pub struct Emulator {
