@@ -4,6 +4,7 @@ mod cartridge;
 mod cpu;
 mod interrupts;
 mod ppu;
+mod timer;
 use crate::debug;
 use apu::ApuRegisters;
 use bootrom::BootRom;
@@ -11,6 +12,7 @@ use cartridge::Cartridge;
 use interrupts::Interrupts;
 use ppu::PpuRegisters;
 use std::panic;
+use timer::TimerRegisters;
 
 pub struct MMU {
     hram: [u8; 0x7F], // 127 bytes of "High RAM" (DMA accessible) aka Zero page.
@@ -23,6 +25,7 @@ pub struct MMU {
     bootrom: BootRom,
     pub ppu_reg: PpuRegisters,
     apu_reg: ApuRegisters,
+    pub timer_reg: TimerRegisters,
 
     // TODO: belongs in MBC
     cartridge: Cartridge,
@@ -49,6 +52,7 @@ impl MMU {
             ppu_reg: PpuRegisters::new(),
             apu_reg: ApuRegisters::new(),
             interrupts: Interrupts::new(),
+            timer_reg: TimerRegisters::new(),
             hram: [0; 0x7F],
             oam: [0; 0xA0],
             cram: [0; 0x2000],
@@ -86,11 +90,7 @@ impl MMU {
             0xFF00 => self.gamepad,
             0xFF01 => 0, // TODO: serial write.
             0xFF02 => 0, // TODO: serial control.
-            0xFF04 => 0, // TODO: Divider timer register.
-            0xFF05 => 0, // TODO: Timer Counter.
-            0xFF06 => 0, // TODO: Timer Modulo.
-            0xFF07 => 0, // TODO: Timer control.
-            0xFF0F => 0, // TODO: Interrupt Flag (IF)
+            0xFF04..=0xFF07 => self.timer_reg.rb(address),
             0xFF10..=0xFF3F => self.apu_reg.rb(address),
             0xFF46 => panic!("0xff46: OAM DMA cannot be read from."),
             0xFF40..=0xFF4B => self.ppu_reg.rb(address),
@@ -114,10 +114,7 @@ impl MMU {
             0xFF00 => self.gamepad = value,
             0xFF01 => (), // TODO: serial write.
             0xFF02 => (), // TODO: serial control.
-            0xFF04 => (), // TODO: Divider timer register.
-            0xFF05 => (), // TODO: Timer Counter.
-            0xFF06 => (), // TODO: Timer Modulo.
-            0xFF07 => (), // TODO: Timer control.
+            0xFF04..=0xFF07 => self.timer_reg.wb(address, value),
             0xFF0F => self.interrupts.intf = value,
             0xFF10..=0xFF3F => self.apu_reg.wb(address, value),
             0xFF46 => self.oam_dma(value),

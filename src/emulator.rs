@@ -1,4 +1,4 @@
-use crate::guest::systems::{Gamepad, CPU, PPU};
+use crate::guest::systems::{Gamepad, Timer, CPU, PPU};
 use crate::guest::MMU;
 use crate::host::{Input, InputEvent, Screen};
 use sdl2;
@@ -9,7 +9,7 @@ pub struct Emulator {
     ppu: PPU,
     mmu: MMU,
     gamepad: Gamepad,
-
+    timer: Timer,
     // Host components.
     input: Input,
     screen: Screen,
@@ -25,6 +25,7 @@ impl Emulator {
             cpu: CPU::new(),
             mmu: MMU::new(cartridge_path),
             ppu: PPU::new(),
+            timer: Timer::new(),
             gamepad: Gamepad::new(),
             input,
             screen,
@@ -64,9 +65,12 @@ impl Emulator {
 
             // PPU step.
             self.ppu.step(mmu, cycles);
-            cycle_count += cycles as usize;
+
+            // Timer step.
+            self.timer.step(mmu, cycles);
 
             // 4Mhz cpu at 60fps.
+            cycle_count += cycles as usize;
             if cycle_count >= (4194304 / 60) {
                 break 'frame;
             }
