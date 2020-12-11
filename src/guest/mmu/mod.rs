@@ -18,7 +18,7 @@ pub struct MMU {
     hram: [u8; 0x7F], // 127 bytes of "High RAM" (DMA accessible) aka Zero page.
     oam: [u8; 0xA0],  // 160 bytes of OAM RAM.
 
-    // TODO: belongs in MBC
+    // TODO: the cartridge RAM belongs in MBC. Different MBCs support different amounts of RAM.
     cram: [u8; 0x2000], // 8KB switchable cartridge RAM.
     sram: [u8; 0x2000], // 8KB (no GBC banking support).
     vram: [u8; 0x2000], // 8KB graphics RAM.
@@ -27,8 +27,7 @@ pub struct MMU {
     apu_reg: ApuRegisters,
     pub timer_reg: TimerRegisters,
 
-    // TODO: belongs in MBC
-    cartridge: Cartridge,
+    cartridge: Cartridge, // Cartridge contains the MBC logic.
     pub gamepad: u8,
     pub interrupts: Interrupts,
     pub pc: u16,

@@ -29,7 +29,7 @@ impl Gamepad {
     /// The array of booleans represents state in order [Right, Left, Up, Down, A, B, Select, Start]
     /// This function is to be called enough to make the input feel crisp but not on every frame.
     /// 60fps is probably a good and simple target.
-    pub fn update_state(&mut self, mmu: &mut MMU, new_state: [bool; 8]) {
+    pub fn update_state(&mut self, new_state: [bool; 8]) {
         self.button_state = Self::parse_row(&new_state[4..]);
         self.dpad_state = Self::parse_row(&new_state[..4]);
 

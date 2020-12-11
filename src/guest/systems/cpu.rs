@@ -180,7 +180,7 @@ impl CPU {
                 0x38 => {
                     let r8 = mmu.get_signed_byte();
                     if mmu.flag_c() {
-                        mmu.pc.wrapping_add(r8 as u16);
+                        let _ = mmu.pc.wrapping_add(r8 as u16);
                         condition_met = true;
                     }
                 }

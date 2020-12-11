@@ -130,9 +130,9 @@ impl PPU {
             let x_coord = mmu.rb(oam_address + 1) as isize - 8; // Stored with built-in offsets.
             let sprite_number = mmu.rb(oam_address + 2) as u16;
             let options = mmu.rb(oam_address + 3);
-            let bg_priority = options & 0x80 != 0;
-            let y_flip = options & 0x40 != 0;
-            let x_flip = options & 0x20 != 0;
+            let _bg_priority = options & 0x80 != 0;
+            let _y_flip = options & 0x40 != 0;
+            let _x_flip = options & 0x20 != 0;
             let palette = if options & 0x10 != 0 {
                 ppu_reg.obj_palette_0
             } else {
