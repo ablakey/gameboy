@@ -1,35 +1,51 @@
+// mod mbc0;
 use std::fs::{metadata, File};
 use std::io::prelude::*;
 use std::str;
+mod empty;
+mod mbc0;
+mod mbc1;
+use empty::MbcEmpty;
+use mbc0::Mbc0;
+use mbc1::Mbc1;
+
+pub trait Mbc {
+    fn rb(&self, address: u16) -> u8;
+    fn wb(&self, address: u16, value: u8);
+}
 
 pub struct Cartridge {
-    data: Option<Vec<u8>>,
+    mbc: Box<dyn Mbc>,
+    // data: Option<Vec<u8>>,
 }
 
 /// For now the cartridge is not inserted.
 impl Cartridge {
     pub fn new(cartridge_path: Option<&String>) -> Self {
-        // Either load the cartridge or return blank data.
-        let data = match cartridge_path {
-            Some(path) => Some(Self::load_cartridge_data(path)),
-            None => None, // No cartridge, returns 0xFF
+        // Pick a memory bank controller based on cartridge header. Possibly no cartridge.
+        let mbc: Box<dyn Mbc> = match cartridge_path {
+            Some(path) => {
+                let data = Self::load_cartridge_data(path);
+                Self::report_cartridge_header(&data);
+                // TODO: based on header, pick an Mbc
+
+                match &data[0x147] {
+                    0x00 => Box::new(Mbc0::new(data)),
+                    0x01..=0x03 => Box::new(Mbc1::new(data)),
+                    m => panic!("Tried to initialize Non-support MBC: {:x}", m),
+                }
+            }
+            None => {
+                println!("No cartridge provided.");
+                Box::new(MbcEmpty::new())
+            }
         };
 
-        match &data {
-            Some(data) => Self::report_cartridge_header(data),
-            None => println!("No cartridge provided."),
-        }
-
-        Self { data }
+        Self { mbc }
     }
 
     pub fn rb(&self, address: u16) -> u8 {
-        match &self.data {
-            Some(data) => *data
-                .get(address as usize)
-                .expect("Tried to get data out of bounds!"),
-            None => 0xFF,
-        }
+        self.mbc.rb(address)
     }
 
     /// Write to ROM.  This isn't actually a write, but the attempt to write will control

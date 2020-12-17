@@ -1,14 +1,13 @@
 mod apu;
 mod bootrom;
-mod cartridge;
 mod cpu;
 mod interrupts;
 mod ppu;
 mod timer;
+use super::cartridge::Cartridge;
 use crate::debug;
 use apu::ApuRegisters;
 use bootrom::BootRom;
-use cartridge::Cartridge;
 use interrupts::Interrupts;
 use ppu::PpuRegisters;
 use std::panic;
@@ -18,8 +17,6 @@ pub struct MMU {
     hram: [u8; 0x7F], // 127 bytes of "High RAM" (DMA accessible) aka Zero page.
     oam: [u8; 0xA0],  // 160 bytes of OAM RAM.
 
-    // TODO: the cartridge RAM belongs in MBC. Different MBCs support different amounts of RAM.
-    cram: [u8; 0x2000], // 8KB switchable cartridge RAM.
     sram: [u8; 0x2000], // 8KB (no GBC banking support).
     vram: [u8; 0x2000], // 8KB graphics RAM.
     bootrom: BootRom,
@@ -54,7 +51,6 @@ impl MMU {
             timer_reg: TimerRegisters::new(),
             hram: [0; 0x7F],
             oam: [0; 0xA0],
-            cram: [0; 0x2000],
             sram: [0; 0x2000],
             vram: [0; 0x2000],
             gamepad: 0x2F, // Initialize with nothing pressed, bit 5 (buttons) selected.
@@ -104,9 +100,9 @@ impl MMU {
     /// Write an 8-bit value to an address.
     pub fn wb(&mut self, address: u16, value: u8) {
         match address {
-            0x0000..=0x7FFF => self.cartridge.wb(address, value),
+            0x0000..=0x7FFF => self.cartridge.wb(address, value), // Cartridge control registers.
             0x8000..=0x9FFF => self.vram[(address - 0x8000) as usize] = value,
-            0xA000..=0xBFFF => self.cram[(address - 0xA000) as usize] = value,
+            0xA000..=0xBFFF => self.cartridge.wb(address, value), // Possible cartridge RAM.
             0xC000..=0xDFFF => self.sram[(address - 0xC000) as usize] = value,
             0xFE00..=0xFE9F => self.oam[(address - 0xFE00) as usize] = value,
             0xFEA0..=0xFEFF => (),
