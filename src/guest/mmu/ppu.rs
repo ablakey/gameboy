@@ -1,13 +1,19 @@
 pub struct PpuRegisters {
+    // STAT (0xFF41)
+    pub lyc_int_enable: bool,   // 0xFF41 (bit 6) LYC  interrupt enable flag.
+    pub mode2_int_enable: bool, // 0xFF41 (bit 5) mode 2 interrupt enable flag.
+    pub mode1_int_enable: bool, // 0xFF41 (bit 4) mode 1 interrupt enable flag.
+    pub mode0_int_enable: bool, // 0xFF41 (bit 3) mode 0 interrupt enable flag.
+
     pub scy: u8,                // 0xFF42: scroll Y background.
     pub scx: u8,                // 0xFF43: scroll X background.
-    pub line: u8,               // 0xFF44: vertical line data is transferred to. 0-153.
+    pub line: u8,               // 0xFF44: vertical line data is transferred to. 0-153. (LY)
     pub background_palette: u8, // 0xFF47: background & window palette details.
     pub obj_palette_0: u8,      // 0xFF48: OBP0 palette data (sprites).
     pub obj_palette_1: u8,      // 0xFF49: OBP1 palette data (sprites).
     pub win_x: u8,              // 0xFF4A: Window x position.
     pub win_y: u8,              // 0xFF4B: Window y position.
-    pub lyc: u8,
+    pub lyc: u8,                // 0xFF45: LCD Y Compare.
     pub mode: u8,
 
     // LCDC (0xFF40)
@@ -28,6 +34,10 @@ impl PpuRegisters {
             bg_tilemap: false,
             lcd_on: false,
             line: 0,
+            lyc_int_enable: false,
+            mode2_int_enable: false,
+            mode1_int_enable: false,
+            mode0_int_enable: false,
             lyc: 0,
             mode: 0,
             obj_palette_0: 0,
@@ -58,18 +68,24 @@ impl PpuRegisters {
                 self.sprite_on = is_bit_set(value, 1);
                 self.window_bg_on = is_bit_set(value, 0);
             }
-            0xFF41 => (), // TODO: handle setting STAT
+            0xFF41 => {
+                self.lyc_int_enable = is_bit_set(value, 6);
+                self.mode2_int_enable = is_bit_set(value, 5);
+                self.mode1_int_enable = is_bit_set(value, 4);
+                self.mode0_int_enable = is_bit_set(value, 3);
+            }
             0xFF42 => self.scy = value,
             0xFF43 => self.scx = value,
             0xFF44 => panic!("Cannot set hwreg.line"),
+            0xFF45 => self.lyc = value,
             0xFF47 => self.background_palette = value,
             0xFF48 => self.obj_palette_0 = value,
             0xFF49 => self.obj_palette_1 = value,
             0xFF4A => self.win_y = value,
             0xFF4B => self.win_x = value,
             _ => panic!(
-                "Tried to set a hardware register with invalid address {:x}",
-                address
+                "Tried to set a ppu register with invalid address {:#x}, value: {:#x}",
+                address, value
             ),
         }
     }
@@ -89,10 +105,10 @@ impl PpuRegisters {
                     | (if self.window_bg_on { 0x01 } else { 0 })
             }
             0xFF41 => {
-                (if false { 0x40 } else { 0 }) // TODO: actually add the registers.
-                    | (if false { 0x20 } else { 0 }) // TODO: actually add the registers.
-                    | (if false { 0x10 } else { 0 }) // TODO: actually add the registers.
-                    | (if false { 0x08 } else { 0 }) // TODO: actually add the registers.
+                (if self.lyc_int_enable { 0x40 } else { 0 })
+                    | (if self.mode2_int_enable { 0x20 } else { 0 })
+                    | (if self.mode1_int_enable { 0x10 } else { 0 })
+                    | (if self.mode0_int_enable { 0x08 } else { 0 })
                     | (if self.line == self.lyc { 0x04 } else { 0 })
                     | self.mode
             }

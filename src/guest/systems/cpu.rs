@@ -234,6 +234,7 @@ impl CPU {
                 0x73 => mmu.wb(hl, e),
                 0x74 => mmu.wb(hl, h),
                 0x75 => mmu.wb(hl, l),
+                0x76 => mmu.interrupts.is_halted = true,
                 0x77 => mmu.wb(hl, a),
                 0x78 => mmu.a = b,
                 0x79 => mmu.a = c,
@@ -318,6 +319,13 @@ impl CPU {
                     }
                 }
                 0xC3 => mmu.pc = mmu.get_next_word(),
+                0xC4 => {
+                    let address = mmu.get_next_word();
+                    if !mmu.flag_z() {
+                        mmu.push_stack(mmu.pc);
+                        mmu.pc = address;
+                    }
+                }
                 0xC5 => mmu.push_stack(bc),
                 0xC6 => {
                     let value = mmu.get_next_byte();
@@ -335,6 +343,13 @@ impl CPU {
                     if mmu.flag_z() {
                         mmu.pc = address;
                         condition_met = true;
+                    }
+                }
+                0xCC => {
+                    let address = mmu.get_next_word();
+                    if mmu.flag_z() {
+                        mmu.push_stack(mmu.pc);
+                        mmu.pc = address;
                     }
                 }
                 0xCD => {

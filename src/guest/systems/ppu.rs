@@ -78,6 +78,8 @@ impl PPU {
             } else {
                 mmu.ppu_reg.line += 1;
             }
+
+            mmu.check_lyc();
         }
 
         // OAM Read mode.

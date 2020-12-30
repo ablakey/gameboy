@@ -11,7 +11,7 @@ use mbc1::Mbc1;
 
 pub trait Mbc {
     fn rb(&self, address: u16) -> u8;
-    fn wb(&self, address: u16, value: u8);
+    fn wb(&mut self, address: u16, value: u8);
 }
 
 pub struct Cartridge {
@@ -51,12 +51,8 @@ impl Cartridge {
     /// Write to ROM.  This isn't actually a write, but the attempt to write will control
     /// on-cartridge ROM banking systems that will make a different bank of data available in the
     // top 16KB of ROM addressable space.
-    pub fn wb(&self, address: u16, value: u8) {
-        // TODO: handle banking. For now we just swallow the writes.
-        println!(
-            "Tried to write to cartridge: {:#06x} {:#04x}",
-            address, value
-        )
+    pub fn wb(&mut self, address: u16, value: u8) {
+        self.mbc.wb(address, value);
     }
 
     fn report_cartridge_header(data: &Vec<u8>) {

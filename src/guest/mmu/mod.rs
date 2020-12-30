@@ -1,8 +1,8 @@
 mod apu;
 mod bootrom;
-mod cpu;
 mod interrupts;
 mod ppu;
+mod registers;
 mod timer;
 use super::cartridge::Cartridge;
 use crate::debug;
@@ -219,6 +219,13 @@ impl MMU {
                 4 // All interupts take 4 cycles to jump to. The actual routine will be longer.
             }
             Some(n) => panic!("Handled invalid interrupt flag: {:#b}", n),
+        }
+    }
+
+    /// If LY and LYC are equal. If LYC Interrupt enable (0xFF41) is set, set a STAT interrupt.
+    pub fn check_lyc(&mut self) {
+        if self.ppu_reg.lyc_int_enable && self.ppu_reg.line == self.ppu_reg.lyc {
+            self.interrupts.
         }
     }
 }

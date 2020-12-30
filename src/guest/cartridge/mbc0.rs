@@ -15,5 +15,5 @@ impl Mbc for Mbc0 {
         self.data[address as usize]
     }
 
-    fn wb(&self, _address: u16, _value: u8) {}
+    fn wb(&mut self, _address: u16, _value: u8) {}
 }

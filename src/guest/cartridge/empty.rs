@@ -13,5 +13,5 @@ impl Mbc for MbcEmpty {
         0xFF
     }
 
-    fn wb(&self, _address: u16, _value: u8) {}
+    fn wb(&mut self, _address: u16, _value: u8) {}
 }
