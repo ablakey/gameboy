@@ -40,7 +40,7 @@ impl PPU {
 
     /// TODO: explain the mode cycle and clocks.
     pub fn step(&mut self, mmu: &mut MMU, cycles: u8) {
-        let mode = mmu.ppu_reg.mode;
+        let mode = mmu.ppu.mode;
 
         // Increase the clock by number of cycles being emulated. This will govern what needs
         // to happen next such as changing modes. It is possible that we exceed the number of
@@ -53,16 +53,16 @@ impl PPU {
         // Transitions to: Mode 1 (VBlank) or Mode 2 (OAM Read)
         if mode == 0 && self.modeclock >= 204 {
             self.modeclock -= 204;
-            mmu.ppu_reg.line += 1; // Advance 1 line as we're in hblank.
+            mmu.ppu.line += 1; // Advance 1 line as we're in hblank.
 
             // At the end of hblank, if on line 143, we've drawn all 144 lines and need to enter
             // vblank. Otherwise go back to mode 2 and loop again.
-            if mmu.ppu_reg.line == 143 {
-                mmu.ppu_reg.mode = 1;
+            if mmu.ppu.line == 143 {
+                mmu.ppu.mode = 1;
                 // TODO: setting interrupt is more detailed than this.
                 mmu.interrupts.intf |= 1; // Set Vblank flag.
             } else {
-                mmu.ppu_reg.mode = 2;
+                mmu.ppu.mode = 2;
             }
         }
 
@@ -72,11 +72,11 @@ impl PPU {
         if mode == 1 && self.modeclock >= 456 {
             self.modeclock -= 456;
 
-            if mmu.ppu_reg.line == 153 {
-                mmu.ppu_reg.mode = 2;
-                mmu.ppu_reg.line = 0;
+            if mmu.ppu.line == 153 {
+                mmu.ppu.mode = 2;
+                mmu.ppu.line = 0;
             } else {
-                mmu.ppu_reg.line += 1;
+                mmu.ppu.line += 1;
             }
         }
 
@@ -86,21 +86,21 @@ impl PPU {
         // in sync. When OAM is needed, it will be read at what's effectively instantaneous speed.
         if mode == 2 && self.modeclock >= 80 {
             self.modeclock -= 80;
-            mmu.ppu_reg.mode = 3;
+            mmu.ppu.mode = 3;
             return;
         }
 
         // VRAM read mode. End of mode 3 acts as end of scanline.
         if mode == 3 && self.modeclock >= 172 {
             self.modeclock -= 172;
-            mmu.ppu_reg.mode = 0;
+            mmu.ppu.mode = 0;
             self.draw_scanline(mmu);
             return;
         }
     }
 
     fn draw_scanline(&mut self, mmu: &MMU) {
-        if !mmu.ppu_reg.lcd_on {
+        if !mmu.ppu.lcd_on {
             return;
         }
 
@@ -113,11 +113,11 @@ impl PPU {
     /// It's easier to work with `isize` values because we're dealing with a mapping space that
     /// can have negative values (off screen sprites).
     fn draw_sprites_scanline(&mut self, mmu: &MMU) {
-        let ppu_reg = &mmu.ppu_reg;
-        let line = ppu_reg.line as isize;
-        let sprite_y_size = if ppu_reg.sprite_size { 16 } else { 8 } as isize;
+        let ppu = &mmu.ppu;
+        let line = ppu.line as isize;
+        let sprite_y_size = if ppu.sprite_size { 16 } else { 8 } as isize;
 
-        if !ppu_reg.sprite_on {
+        if !ppu.sprite_on {
             return;
         };
 
@@ -134,9 +134,9 @@ impl PPU {
             let _y_flip = options & 0x40 != 0;
             let _x_flip = options & 0x20 != 0;
             let palette = if options & 0x10 != 0 {
-                ppu_reg.obj_palette_0
+                ppu.obj_palette_0
             } else {
-                ppu_reg.obj_palette_1
+                ppu.obj_palette_1
             };
 
             // Is the sprite not on this line?
@@ -187,11 +187,11 @@ impl PPU {
     /// the relevant tiles. Only a subset of the 256x256 scene is displayed, so we are not always
     /// drawing complete tiles. There's also wrap-around possible.
     fn draw_background_scanline(&mut self, mmu: &MMU) {
-        let ppu_reg = &mmu.ppu_reg;
+        let ppu = &mmu.ppu;
 
         // Flags determine which of the two tilemaps and tiledata tables we use.
-        let is_tiledata_low = ppu_reg.tile_data_table;
-        let is_tilemap_high = ppu_reg.bg_tilemap;
+        let is_tiledata_low = ppu.tile_data_table;
+        let is_tilemap_high = ppu.bg_tilemap;
 
         // Use the LCDC hardware register to determine which of the two tilemap spaces we are
         // utilizing. They both behave the same in all ways.
@@ -204,8 +204,8 @@ impl PPU {
 
         // Scroll offsets.  The tile maps represent a 256x256 scene of pixels. We only want to
         // render a 160x144 viewport of it.
-        let scy = ppu_reg.scy;
-        let scx = ppu_reg.scx;
+        let scy = ppu.scy;
+        let scx = ppu.scx;
 
         // We want to iterate through 160 pixels to draw one scanline.
         for x in 0..160u8 {
@@ -213,7 +213,7 @@ impl PPU {
             // register values. This accounts for the viewport we want to draw not being the same
             // as the 256x256 tilemap scene.
             let x = x.wrapping_add(scx);
-            let y = ppu_reg.line.wrapping_add(scy);
+            let y = ppu.line.wrapping_add(scy);
 
             // There are 1024 tiles mapped in a 32x32 grid of 8x8 pixel tiles. The 1024 tiles are
             // described in one of the two tile maps as a row-major array. To get the tile number
@@ -245,13 +245,13 @@ impl PPU {
             let color_value = get_pixel_color_value(
                 tile_data_lower,
                 tile_data_upper,
-                ppu_reg.background_palette,
+                ppu.background_palette,
                 pixel_col_num,
             );
 
             // Update the image buffer with this pixel value. Given a well-behaved main loop should
             // iterate through every pixel, there is no need to clear the previous buffer data.
-            self.image_buffer[ppu_reg.line as usize * 160 + x as usize] = color_value;
+            self.image_buffer[ppu.line as usize * 160 + x as usize] = color_value;
         }
     }
 }

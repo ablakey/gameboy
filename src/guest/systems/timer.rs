@@ -25,15 +25,15 @@ impl Timer {
         // Divider.
         self.divider_lapsed += cycles as u16;
         while self.divider_lapsed >= DIVIDER_TICKSIZE as u16 {
-            mmu.timer_reg.divider = mmu.timer_reg.divider.wrapping_add(1);
+            mmu.timer.divider = mmu.timer.divider.wrapping_add(1);
             self.divider_lapsed -= DIVIDER_TICKSIZE as u16;
         }
 
         // Counter.
-        if mmu.timer_reg.started {
+        if mmu.timer.started {
             // The timer frequency is actually a function of the CPU (a not implemented CGB mode
             // would double the CPU and therefore all the timer modes would run 2x as well)
-            let timer_ticksize = match mmu.timer_reg.clock {
+            let timer_ticksize = match mmu.timer.clock {
                 0 => CPU_FREQ / 1024, // 00: 4.096 KHz
                 1 => CPU_FREQ / 16,   // 01: 262.144 Khz
                 2 => CPU_FREQ / 64,   // 10: 65.536 KHz
@@ -43,12 +43,12 @@ impl Timer {
 
             self.counter_lapsed += cycles as u16;
             while self.counter_lapsed >= timer_ticksize {
-                mmu.timer_reg.counter = mmu.timer_reg.counter.wrapping_add(1);
+                mmu.timer.counter = mmu.timer.counter.wrapping_add(1);
                 self.counter_lapsed -= timer_ticksize;
 
                 // Timer has overflowed.
-                if mmu.timer_reg.counter == 0 {
-                    mmu.timer_reg.counter = mmu.timer_reg.modulo;
+                if mmu.timer.counter == 0 {
+                    mmu.timer.counter = mmu.timer.modulo;
                 }
             }
         }

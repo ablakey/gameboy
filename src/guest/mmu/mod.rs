@@ -20,9 +20,9 @@ pub struct MMU {
     sram: [u8; 0x2000], // 8KB (no GBC banking support).
     vram: [u8; 0x2000], // 8KB graphics RAM.
     bootrom: BootRom,
-    pub ppu_reg: PpuRegisters,
-    apu_reg: ApuRegisters,
-    pub timer_reg: TimerRegisters,
+    pub ppu: PpuRegisters,
+    apu: ApuRegisters,
+    pub timer: TimerRegisters,
 
     cartridge: Cartridge, // Cartridge contains the MBC logic.
     pub gamepad: u8,
@@ -45,10 +45,10 @@ impl MMU {
         Self {
             bootrom: BootRom::new(),
             cartridge: Cartridge::new(cartridge_path),
-            ppu_reg: PpuRegisters::new(),
-            apu_reg: ApuRegisters::new(),
+            ppu: PpuRegisters::new(),
+            apu: ApuRegisters::new(),
             interrupts: Interrupts::new(),
-            timer_reg: TimerRegisters::new(),
+            timer: TimerRegisters::new(),
             hram: [0; 0x7F],
             oam: [0; 0xA0],
             sram: [0; 0x2000],
@@ -87,10 +87,10 @@ impl MMU {
             0xFF00 => self.gamepad,
             0xFF01 => 0, // TODO: serial write.
             0xFF02 => 0, // TODO: serial control.
-            0xFF04..=0xFF07 => self.timer_reg.rb(address),
-            0xFF10..=0xFF3F => self.apu_reg.rb(address),
+            0xFF04..=0xFF07 => self.timer.rb(address),
+            0xFF10..=0xFF3F => self.apu.rb(address),
             0xFF46 => panic!("0xff46: OAM DMA cannot be read from."),
-            0xFF40..=0xFF4B => self.ppu_reg.rb(address),
+            0xFF40..=0xFF4B => self.ppu.rb(address),
             0xFF80..=0xFFFE => self.hram[(address - 0xFF80) as usize],
             0xFFFF => self.interrupts.inte,
             _ => {
@@ -111,11 +111,11 @@ impl MMU {
             0xFF00 => self.gamepad = value,
             0xFF01 => (), // TODO: serial write.
             0xFF02 => (), // TODO: serial control.
-            0xFF04..=0xFF07 => self.timer_reg.wb(address, value),
+            0xFF04..=0xFF07 => self.timer.wb(address, value),
             0xFF0F => self.interrupts.intf = value,
-            0xFF10..=0xFF3F => self.apu_reg.wb(address, value),
+            0xFF10..=0xFF3F => self.apu.wb(address, value),
             0xFF46 => self.oam_dma(value),
-            0xFF40..=0xFF4B => self.ppu_reg.wb(address, value),
+            0xFF40..=0xFF4B => self.ppu.wb(address, value),
             0xFF50 => self.bootrom.is_enabled = false,
             0xFF80..=0xFFFE => self.hram[(address - 0xFF80) as usize] = value,
             0xFF7F => (), // tetris.gb off-by-one error.
@@ -227,9 +227,9 @@ impl MMU {
     /// If LY and LYC are equal and if LYC Interrupt enable (0xFF41) is set, set a STAT interrupt.
     /// Documentation says this is "permanently compared" so we should do it every tick. It's
     /// possible that it can be optimized. There's also a possibility it also has to be done
-    /// immediately when ppu_reg.lyc is changed.
+    /// immediately when ppu.lyc is changed.
     pub fn check_lyc_interrupt(&mut self) {
-        if self.ppu_reg.lyc_int_enable && self.ppu_reg.line == self.ppu_reg.lyc {
+        if self.ppu.lyc_int_enable && self.ppu.line == self.ppu.lyc {
             self.interrupts.intf |= 0x02;
         }
     }
