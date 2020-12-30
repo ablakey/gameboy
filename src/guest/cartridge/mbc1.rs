@@ -29,7 +29,10 @@ impl Mbc for Mbc1 {
                 let offset = 0x4000 * (self.rom_bank_number - 1) as u16;
                 self.data[(address + offset) as usize]
             }
-            0xA000..=0xBFFF => self.ram[address as usize],
+            0xA000..=0xBFFF => {
+                println!("Read RAM");
+                self.ram[(address - 0xA000) as usize]
+            }
             _ => {
                 panic!("Tried to read from {:#x} which is not mapped.", address);
             }
@@ -40,7 +43,8 @@ impl Mbc for Mbc1 {
         match address {
             0x0000..=0x1FFF => panic!("Tried to write to RAM enable bit."),
             0x2000..=0x3FFF => {
-                self.rom_bank_number = value & 0x1F; // Mask out top 3 bits.
+                let bank = value & 0x1F; // Mask out top 3 bits.
+                self.rom_bank_number = bank;
             }
             0xA000..=0xBFFF => {
                 self.ram[(address - 0xA000) as usize] = value;

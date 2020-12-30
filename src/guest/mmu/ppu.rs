@@ -27,6 +27,8 @@ pub struct PpuRegisters {
     pub sprite_size: bool,     // Bit2: 0: 8x8, 1: 8x16
     pub sprite_on: bool,       // Bit1: Draw sprites?
     pub window_bg_on: bool,    // Bit0: Draw Window and Background?
+
+    pub clear_screen: bool, // Emulator flag: get PPU to clear the screen and reset mode clock.
 }
 
 impl PpuRegisters {
@@ -54,6 +56,7 @@ impl PpuRegisters {
             window_bg_on: false,
             window_on: false,
             window_tilemap: false,
+            clear_screen: false,
         }
     }
 
@@ -93,6 +96,7 @@ impl PpuRegisters {
     pub fn wb(&mut self, address: u16, value: u8) {
         match address {
             0xFF40 => {
+                let was_lcd_on = self.lcd_on;
                 // TODO: I think some other values need to be reset if lcd_on gets toggled.
                 self.lcd_on = is_bit_set(value, 7);
                 self.window_tilemap = is_bit_set(value, 6);
@@ -102,6 +106,13 @@ impl PpuRegisters {
                 self.sprite_size = is_bit_set(value, 2);
                 self.sprite_on = is_bit_set(value, 1);
                 self.window_bg_on = is_bit_set(value, 0);
+
+                // LCD was turned off.
+                if was_lcd_on && !self.lcd_on {
+                    self.line = 0;
+                    self.mode = 0;
+                    self.clear_screen = true;
+                }
             }
             0xFF41 => {
                 self.lyc_int_enable = is_bit_set(value, 6);

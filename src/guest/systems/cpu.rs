@@ -220,6 +220,7 @@ impl CPU {
                 0x63 => mmu.h = e,
                 0x64 => mmu.h = h,
                 0x65 => mmu.h = l,
+                0x66 => mmu.h = mmu.rb(hl),
                 0x67 => mmu.h = a,
                 0x68 => mmu.l = b,
                 0x69 => mmu.l = c,
@@ -275,7 +276,13 @@ impl CPU {
                 0x9D => alu::sbc(mmu, l),
                 0x9E => alu::sbc(mmu, mmu.rb(hl)),
                 0x9F => alu::sbc(mmu, a),
+                0xA0 => alu::and(mmu, b),
                 0xA1 => alu::and(mmu, c),
+                0xA2 => alu::and(mmu, d),
+                0xA3 => alu::and(mmu, e),
+                0xA4 => alu::and(mmu, h),
+                0xA5 => alu::and(mmu, l),
+                0xA6 => alu::and(mmu, mmu.rb(hl)),
                 0xA7 => alu::and(mmu, a),
                 0xA8 => alu::xor(mmu, b),
                 0xA9 => alu::xor(mmu, c),
@@ -312,7 +319,7 @@ impl CPU {
                     mmu.set_bc(address);
                 }
                 0xC2 => {
-                    let address = mmu.get_next_word(); // Need to get regardless to advance PC.
+                    let address = mmu.get_next_word();
                     if !mmu.flag_z() {
                         mmu.pc = address;
                         condition_met = true;
@@ -339,7 +346,7 @@ impl CPU {
                 }
                 0xC9 => mmu.pc = mmu.pop_stack(),
                 0xCA => {
-                    let address = mmu.get_next_word(); // Need to get regardless to advance PC.
+                    let address = mmu.get_next_word();
                     if mmu.flag_z() {
                         mmu.pc = address;
                         condition_met = true;
@@ -371,7 +378,13 @@ impl CPU {
                     let value = mmu.pop_stack();
                     mmu.set_de(value);
                 }
-
+                0xD2 => {
+                    let address = mmu.get_next_word();
+                    if !mmu.flag_c() {
+                        mmu.pc = address;
+                        condition_met = true;
+                    }
+                }
                 0xD5 => mmu.push_stack(de),
                 0xD6 => {
                     let value = mmu.get_next_byte();
@@ -699,6 +712,6 @@ impl CPU {
             operation_address
         );
 
-        panic!("{}", msg);
+        panic!("Panic opcode: {}", msg);
     }
 }

@@ -11,6 +11,8 @@ fn main() {
 
     let cartridge_path = if args.len() > 1 { Some(&args[1]) } else { None };
 
+    println!("{}", cartridge_path.unwrap());
+
     let mut emulator = Emulator::new(cartridge_path).unwrap();
 
     let result = panic::catch_unwind(panic::AssertUnwindSafe(|| emulator.run_forever()));
