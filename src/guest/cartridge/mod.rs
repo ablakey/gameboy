@@ -16,23 +16,22 @@ pub trait Mbc {
 
 pub struct Cartridge {
     mbc: Box<dyn Mbc>,
-    // data: Option<Vec<u8>>,
 }
 
 /// For now the cartridge is not inserted.
 impl Cartridge {
+    /// Initialize the cartridge by determining from the header what memory bank controller to use.
+    /// It is possible that no cartridge is installed.
     pub fn new(cartridge_path: Option<&String>) -> Self {
-        // Pick a memory bank controller based on cartridge header. Possibly no cartridge.
         let mbc: Box<dyn Mbc> = match cartridge_path {
             Some(path) => {
                 let data = Self::load_cartridge_data(path);
                 Self::report_cartridge_header(&data);
-                // TODO: based on header, pick an Mbc
 
                 match &data[0x147] {
                     0x00 => Box::new(Mbc0::new(data)),
                     0x01..=0x03 => Box::new(Mbc1::new(data)),
-                    m => panic!("Tried to initialize Non-support MBC: {:x}", m),
+                    m => panic!("Tried to initialize non-supported MBC: {:x}", m),
                 }
             }
             None => {
@@ -64,8 +63,7 @@ impl Cartridge {
     }
 
     /// Load a cartridge into memory.
-    /// TODO: support cartridges of different sizes using banking. It would return a vector.
-    /// A banking mechanism (register based?) would decide which slice of that vector to expose.
+    /// A vector is allocated because we don't know until runtime how large the cartridge is.
     fn load_cartridge_data(path: &String) -> Vec<u8> {
         let mut f = File::open(path).expect("No file found.");
         let metadata = metadata(path).expect("Unable to read metadata.");

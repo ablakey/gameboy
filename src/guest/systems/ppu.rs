@@ -50,7 +50,7 @@ impl PPU {
 
         // HBlank. Upon entering this state, we would have successfully drawn a line and are
         // moving on to the next line or vblank.
-        // Transition: Mode 1 (VBlank) or Mode 2 (OAM Read)
+        // Transitions to: Mode 1 (VBlank) or Mode 2 (OAM Read)
         if mode == 0 && self.modeclock >= 204 {
             self.modeclock -= 204;
             mmu.ppu_reg.line += 1; // Advance 1 line as we're in hblank.
@@ -66,9 +66,9 @@ impl PPU {
             }
         }
 
-        // VBlank. This runs for 10 lines (4560 cycles) and does increment hwreg.ly. It is valid
+        // VBlank. This runs for 10 lines (4560 cycles) and increments hwreg.ly. It is valid
         // for hwreg.ly to be a value of 144 to 152, representing when it is in vblank.
-        // Transition: Mode 2 (OAM Read)
+        // Transitions to: Mode 2 (OAM Read)
         if mode == 1 && self.modeclock >= 456 {
             self.modeclock -= 456;
 
@@ -78,8 +78,6 @@ impl PPU {
             } else {
                 mmu.ppu_reg.line += 1;
             }
-
-            mmu.check_lyc();
         }
 
         // OAM Read mode.

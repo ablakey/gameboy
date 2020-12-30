@@ -70,6 +70,8 @@ impl MMU {
     /// Read a byte from address.
     pub fn rb(&self, address: u16) -> u8 {
         match address {
+            // the first 256KB that's usually addressing the cartridge main memory bank initially
+            // addresses the bootrom.
             0x00..=0xFF => {
                 if self.bootrom.is_enabled {
                     self.bootrom.rb(address)
@@ -222,17 +224,34 @@ impl MMU {
         }
     }
 
-    /// If LY and LYC are equal. If LYC Interrupt enable (0xFF41) is set, set a STAT interrupt.
-    pub fn check_lyc(&mut self) {
+    /// If LY and LYC are equal and if LYC Interrupt enable (0xFF41) is set, set a STAT interrupt.
+    /// Documentation says this is "permanently compared" so we should do it every tick. It's
+    /// possible that it can be optimized. There's also a possibility it also has to be done
+    /// immediately when ppu_reg.lyc is changed.
+    pub fn check_lyc_interrupt(&mut self) {
         if self.ppu_reg.lyc_int_enable && self.ppu_reg.line == self.ppu_reg.lyc {
-            self.interrupts.
+            self.interrupts.intf |= 0x02;
         }
     }
+}
+
+/// Return boolean state of a bit in a byte. This is for convenience and not a concept of the DMG-01
+/// internals.
+fn is_bit_set(value: u8, position: u8) -> bool {
+    (value & (1 << position)) != 0
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_is_bit_set() {
+        assert!(is_bit_set(0b10000000, 7));
+        assert!(is_bit_set(0b11111111, 0));
+        assert!(!is_bit_set(0b11111110, 0));
+        assert!(!is_bit_set(0b10000000, 6));
+    }
 
     #[test]
     fn test_rw() {

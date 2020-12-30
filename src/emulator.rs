@@ -3,6 +3,10 @@ use crate::guest::MMU;
 use crate::host::{Input, InputEvent, Screen};
 use sdl2;
 
+pub const CPU_FREQ: usize = 4194304; // 4MHz for DMG-01.
+pub const DIVIDER_FREQ: usize = CPU_FREQ / 16384; // Divider always runs at 16KHz.
+const FRAMERATE: usize = 60;
+
 pub struct Emulator {
     // Guest components.
     cpu: CPU,
@@ -48,6 +52,8 @@ impl Emulator {
         self.mmu.dump_state();
     }
 
+    /// Emulate one whole frame work of CPU, PPU, Timer work. Given 60fps, 1 frame is 1/60 of the
+    /// CPU clock speed worth of work:
     fn emulate_frame(&mut self) {
         let mmu = &mut self.mmu;
         let mut cycle_count: usize = 0;
@@ -71,7 +77,7 @@ impl Emulator {
 
             // 4Mhz cpu at 60fps.
             cycle_count += cycles as usize;
-            if cycle_count >= (4194304 / 60) {
+            if cycle_count >= (CPU_FREQ / FRAMERATE) {
                 break 'frame;
             }
         }

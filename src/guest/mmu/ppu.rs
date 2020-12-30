@@ -1,3 +1,5 @@
+use super::is_bit_set;
+
 pub struct PpuRegisters {
     // STAT (0xFF41)
     pub lyc_int_enable: bool,   // 0xFF41 (bit 6) LYC  interrupt enable flag.
@@ -55,6 +57,39 @@ impl PpuRegisters {
         }
     }
 
+    /// Return an 8-bit value when reading from a given address. Some hardware register addresses
+    /// are not readable.
+    pub fn rb(&self, address: u16) -> u8 {
+        match address {
+            0xFF40 => {
+                (if self.lcd_on { 0x80 } else { 0 })
+                    | (if self.window_tilemap { 0x40 } else { 0 })
+                    | (if self.window_on { 0x20 } else { 0 })
+                    | (if self.tile_data_table { 0x10 } else { 0 })
+                    | (if self.bg_tilemap { 0x08 } else { 0 })
+                    | (if self.sprite_size { 0x04 } else { 0 })
+                    | (if self.sprite_on { 0x02 } else { 0 })
+                    | (if self.window_bg_on { 0x01 } else { 0 })
+            }
+            0xFF41 => {
+                (if self.lyc_int_enable { 0x40 } else { 0 })
+                    | (if self.mode2_int_enable { 0x20 } else { 0 })
+                    | (if self.mode1_int_enable { 0x10 } else { 0 })
+                    | (if self.mode0_int_enable { 0x08 } else { 0 })
+                    | (if self.line == self.lyc { 0x04 } else { 0 })
+                    | self.mode
+            }
+            0xFF42 => self.scy,
+            0xFF43 => self.scx,
+            0xFF44 => self.line,
+            0xFF45 => self.lyc,
+            _ => panic!(
+                "Tried to get a PPU register wtih invalid address {:x}",
+                address
+            ),
+        }
+    }
+
     pub fn wb(&mut self, address: u16, value: u8) {
         match address {
             0xFF40 => {
@@ -88,55 +123,5 @@ impl PpuRegisters {
                 address, value
             ),
         }
-    }
-
-    /// Return an 8-bit value when reading from a given address. Some hardware register addresses
-    /// are not readable.
-    pub fn rb(&self, address: u16) -> u8 {
-        match address {
-            0xFF40 => {
-                (if self.lcd_on { 0x80 } else { 0 })
-                    | (if self.window_tilemap { 0x40 } else { 0 })
-                    | (if self.window_on { 0x20 } else { 0 })
-                    | (if self.tile_data_table { 0x10 } else { 0 })
-                    | (if self.bg_tilemap { 0x08 } else { 0 })
-                    | (if self.sprite_size { 0x04 } else { 0 })
-                    | (if self.sprite_on { 0x02 } else { 0 })
-                    | (if self.window_bg_on { 0x01 } else { 0 })
-            }
-            0xFF41 => {
-                (if self.lyc_int_enable { 0x40 } else { 0 })
-                    | (if self.mode2_int_enable { 0x20 } else { 0 })
-                    | (if self.mode1_int_enable { 0x10 } else { 0 })
-                    | (if self.mode0_int_enable { 0x08 } else { 0 })
-                    | (if self.line == self.lyc { 0x04 } else { 0 })
-                    | self.mode
-            }
-            0xFF42 => self.scy,
-            0xFF43 => self.scx,
-            0xFF44 => self.line,
-            0xFF45 => self.lyc,
-            _ => panic!(
-                "Tried to get a PPU register wtih invalid address {:x}",
-                address
-            ),
-        }
-    }
-}
-
-fn is_bit_set(value: u8, position: u8) -> bool {
-    (value & (1 << position)) != 0
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_is_bit_set() {
-        assert!(is_bit_set(0b10000000, 7));
-        assert!(is_bit_set(0b11111111, 0));
-        assert!(!is_bit_set(0b11111110, 0));
-        assert!(!is_bit_set(0b10000000, 6));
     }
 }

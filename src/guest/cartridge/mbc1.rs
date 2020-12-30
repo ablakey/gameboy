@@ -17,6 +17,7 @@ impl Mbc1 {
 }
 
 impl Mbc for Mbc1 {
+    /// Read 0x0000 - 0x3FFF directly. Read 0x4000 - 0x7FFF from the currently active memory bank.
     fn rb(&self, address: u16) -> u8 {
         match address {
             0x0000..=0x3FFF => self.data[address as usize],

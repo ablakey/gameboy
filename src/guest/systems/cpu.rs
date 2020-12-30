@@ -675,6 +675,9 @@ impl CPU {
         // If EI or DI was called, tick down the delay and possibly modify IME.
         mmu.interrupts.tick_ime_timer();
 
+        // Check LYC every step.
+        mmu.check_lyc_interrupt();
+
         // Try to handle an interrupt. If none was handled, try to do an opcode if not halted.
         match mmu.try_interrupt() {
             0 => {

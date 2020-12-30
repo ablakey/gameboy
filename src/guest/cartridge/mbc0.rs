@@ -10,7 +10,10 @@ impl Mbc0 {
     }
 }
 
+/// MBC 0 is a simple controller for cartridges with 16KB of ROM and no RAM. The one and only
+/// memory bank is fully addressable so nothing fancy has to happen.
 impl Mbc for Mbc0 {
+    /// Read 0x000 - 0x7FFF directly.
     fn rb(&self, address: u16) -> u8 {
         self.data[address as usize]
     }
