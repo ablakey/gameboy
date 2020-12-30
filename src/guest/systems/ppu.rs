@@ -206,7 +206,7 @@ impl PPU {
                 }
 
                 // Don't draw if hiding under the background.
-                if bg_priority && !self.bg_color_zero[x_pos as usize] {
+                if mmu.ppu.window_bg_on && bg_priority && !self.bg_color_zero[x_pos as usize] {
                     continue;
                 }
 
