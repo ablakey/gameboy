@@ -31,6 +31,7 @@ impl TimerRegisters {
             0xFF04 => self.divider,
             0xFF05 => self.counter,
             0xFF06 => self.modulo,
+            0xFF07 => self.clock | ((self.started as u8) << 2),
             _ => panic!("Tried to read from invalid Timer register: {:x}", address),
         }
     }
@@ -42,7 +43,7 @@ impl TimerRegisters {
             0xFF06 => self.modulo = value,
             0xFF07 => {
                 self.started = is_bit_set(value, 2);
-                self.clock = value & 0b11; // Bottom two bits represent one of 4 clock options.
+                self.clock = value & 0x3; // Bottom two bits represent one of 4 clock options.
             }
             _ => panic!(
                 "Tried to write {:#x} to invalid Timer register: {:#x}",

@@ -49,6 +49,7 @@ impl Timer {
                 // Timer has overflowed.
                 if mmu.timer.counter == 0 {
                     mmu.timer.counter = mmu.timer.modulo;
+                    mmu.interrupts.intf |= 0x04; // Bit 2 is Timer Overflow interrupt.
                 }
             }
         }
