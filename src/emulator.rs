@@ -20,14 +20,14 @@ pub struct Emulator {
 }
 
 impl Emulator {
-    pub fn new(cartridge_path: Option<&String>) -> Result<Self, String> {
+    pub fn new(cartridge_path: Option<&String>, use_bootrom: bool) -> Result<Self, String> {
         // SDL-based host: graphics, sound, audio.
         let sdl_context = sdl2::init()?;
         let input = Input::new(&sdl_context)?;
         let screen = Screen::new(&sdl_context, 4)?;
         Ok(Self {
             cpu: CPU::new(),
-            mmu: MMU::new(cartridge_path),
+            mmu: MMU::new(cartridge_path, use_bootrom),
             ppu: PPU::new(),
             timer: Timer::new(),
             gamepad: Gamepad::new(),
@@ -46,10 +46,6 @@ impl Emulator {
             }
             self.emulate_frame();
         }
-    }
-
-    pub fn dump_state(&self) {
-        self.mmu.dump_state();
     }
 
     /// Emulate one whole frame work of CPU, PPU, Timer work. Given 60fps, 1 frame is 1/60 of the

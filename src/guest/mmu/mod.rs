@@ -1,16 +1,14 @@
 mod apu;
-mod bootrom;
+mod bootloader;
 mod interrupts;
 mod ppu;
 mod registers;
 mod timer;
 use super::cartridge::Cartridge;
-use crate::debug;
 use apu::ApuRegisters;
-use bootrom::BootRom;
+use bootloader::{BootLoader, BOOTROM_MMU_VALUES};
 use interrupts::Interrupts;
 use ppu::PpuRegisters;
-use std::panic;
 use timer::TimerRegisters;
 
 pub struct MMU {
@@ -19,7 +17,7 @@ pub struct MMU {
 
     sram: [u8; 0x2000], // 8KB (no GBC banking support).
     vram: [u8; 0x2000], // 8KB graphics RAM.
-    bootrom: BootRom,
+    bootloader: BootLoader,
     pub ppu: PpuRegisters,
     apu: ApuRegisters,
     pub timer: TimerRegisters,
@@ -41,9 +39,9 @@ pub struct MMU {
 
 impl MMU {
     /// Initialize the MMU by loading the boot_rom into the first 256 addressable bytes.
-    pub fn new(cartridge_path: Option<&String>) -> Self {
-        Self {
-            bootrom: BootRom::new(),
+    pub fn new(cartridge_path: Option<&String>, use_bootrom: bool) -> Self {
+        let mut mmu = Self {
+            bootloader: BootLoader::new(use_bootrom),
             cartridge: Cartridge::new(cartridge_path),
             ppu: PpuRegisters::new(),
             apu: ApuRegisters::new(),
@@ -64,17 +62,39 @@ impl MMU {
             h: 0,
             l: 0,
             f: 0,
-        }
+        };
+
+        // Initialize memory, timers, registers, etc. Typically the bootloader will do this, but if
+        // we skip using the bootloader (probably becuase we don't have a ROM), we can just set the
+        // end result.
+        if !use_bootrom {
+            BOOTROM_MMU_VALUES
+                .iter()
+                .for_each(|(address, value)| mmu.wb(*address, *value));
+
+            mmu.a = 0x01;
+            mmu.f = 0xB0;
+            mmu.b = 0x00;
+            mmu.c = 0x13;
+            mmu.d = 0x00;
+            mmu.e = 0xD8;
+            mmu.h = 0x01;
+            mmu.l = 0x4D;
+            mmu.pc = 0x0100;
+            mmu.sp = 0xFFFE;
+        };
+
+        mmu
     }
 
     /// Read a byte from address.
     pub fn rb(&self, address: u16) -> u8 {
         match address {
             // the first 256KB that's usually addressing the cartridge main memory bank initially
-            // addresses the bootrom.
+            // addresses the BootLoader.
             0x00..=0xFF => {
-                if self.bootrom.is_enabled {
-                    self.bootrom.rb(address)
+                if self.bootloader.is_enabled {
+                    self.bootloader.rb(address)
                 } else {
                     self.cartridge.rb(address)
                 }
@@ -116,7 +136,7 @@ impl MMU {
             0xFF10..=0xFF3F => self.apu.wb(address, value),
             0xFF46 => self.oam_dma(value),
             0xFF40..=0xFF4B => self.ppu.wb(address, value),
-            0xFF50 => self.bootrom.is_enabled = false,
+            0xFF50 => self.bootloader.is_enabled = false,
             0xFF80..=0xFFFE => self.hram[(address - 0xFF80) as usize] = value,
             0xFF7F => (), // tetris.gb off-by-one error.
             0xFFFF => self.interrupts.inte = value,
@@ -184,27 +204,6 @@ impl MMU {
         }
     }
 
-    /// Panic with a given message, but also printout some debug info.
-    /// By making it a diverging function, we don't care about return type.
-    pub fn dump_state(&self) {
-        // Dump VRAM
-        let vram_dump = debug::format_hex(&self.vram.to_vec(), 0x8000);
-        debug::dump_to_file(vram_dump, "vram");
-
-        // Dump SRAM
-        let vram_dump = debug::format_hex(&self.sram.to_vec(), 0xC000);
-        debug::dump_to_file(vram_dump, "sram");
-
-        // Dump tilemaps
-        let tilemap0 = (0x9800 - 0x8000) as usize;
-        let tilemap0_dump = debug::format_tilemap(&self.vram[tilemap0..tilemap0 + 1024]);
-        debug::dump_to_file(tilemap0_dump, "tilemap0");
-
-        let tilemap1 = (0x9C00 - 0x8000) as usize;
-        let tilemap0_dump = debug::format_tilemap(&self.vram[tilemap1..tilemap1 + 1024]);
-        debug::dump_to_file(tilemap0_dump, "tilemap1");
-    }
-
     /// Try to handle an interrupt and return the number of cycles it took.
     /// Usually this is 0 cycles and no interrupt is handled.
     pub fn try_interrupt(&mut self) -> u8 {
@@ -255,7 +254,7 @@ mod tests {
 
     #[test]
     fn test_rw() {
-        let mut mmu = MMU::new(None);
+        let mut mmu = MMU::new(None, false);
         mmu.sram[0] = 0xFF;
         mmu.sram[1] = 0x11;
         let word = mmu.rw(0xC000);
@@ -264,7 +263,7 @@ mod tests {
 
     #[test]
     fn test_ww() {
-        let mut mmu = MMU::new(None);
+        let mut mmu = MMU::new(None, false);
         mmu.ww(0xC000, 0xFF11);
         assert_eq!(mmu.sram[0], 0x11);
         assert_eq!(mmu.sram[1], 0xFF);
@@ -272,7 +271,7 @@ mod tests {
 
     #[test]
     fn test_push_stack() {
-        let mut mmu = MMU::new(None);
+        let mut mmu = MMU::new(None, false);
         mmu.sp = 0xDFFF;
         mmu.push_stack(0x11FF);
         mmu.push_stack(0x22DD);
@@ -285,7 +284,7 @@ mod tests {
 
     #[test]
     fn test_pop_stack() {
-        let mut mmu = MMU::new(None);
+        let mut mmu = MMU::new(None, false);
         mmu.sp = 0xfffe; // A common place to put the stack.
         mmu.push_stack(0x11FF);
         assert_eq!(mmu.sp, 0xfffc); // Stack Pointer has been decremented to the next address slot.
