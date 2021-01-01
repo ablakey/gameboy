@@ -17,9 +17,9 @@ impl CPU {
     /// given every address put on the stack is a word in length.
     ///
     /// Program Counter:
-    /// Begins at 0x0 and runs through the BootLoader. Once the BootLoader is complete, it should
-    /// be at 0x100. Some emulators ignore the BootLoader, pre-initialize the emulator, and begin
-    /// at 0x100. We don't take that shortcut, as running the BootLoader is a great test.
+    /// Begins at 0x0 and runs through the bootrom. Once the bootrom is complete, it should
+    /// be at 0x100. Some emulators ignore the bootrom, pre-initialize the emulator, and begin
+    /// at 0x100. We don't take that shortcut, as running the bootrom is a great test.
     pub fn new() -> Self {
         Self {
             opcodes: OpCodes::from_path("data/opcodes.json").unwrap(),

@@ -73,8 +73,13 @@ impl PPU {
             // vblank. Otherwise go back to mode 2 and loop again.
             if mmu.ppu.line == 143 {
                 mmu.ppu.mode = 1;
+
+                // LCDC Status interrupt entering mode 1?
+                if mmu.ppu.mode1_int_enable {
+                    mmu.interrupts.intf |= 0x02;
+                }
                 // TODO: setting interrupt is more detailed than this.
-                mmu.interrupts.intf |= 1; // Set Vblank flag.
+                mmu.interrupts.intf |= 0x01; // Set Vblank interrupt flag.
             } else {
                 mmu.ppu.mode = 2;
             }
@@ -89,6 +94,11 @@ impl PPU {
             if mmu.ppu.line == 153 {
                 mmu.ppu.mode = 2;
                 mmu.ppu.line = 0;
+
+                // LCDC Status interrupt entering mode 2?
+                if mmu.ppu.mode2_int_enable {
+                    mmu.interrupts.intf |= 0x02;
+                }
             } else {
                 mmu.ppu.line += 1;
             }
@@ -108,6 +118,12 @@ impl PPU {
         if mode == 3 && self.modeclock >= 172 {
             self.modeclock -= 172;
             mmu.ppu.mode = 0;
+
+            // LCDC Status interrupt entering mode 0?
+            if mmu.ppu.mode0_int_enable {
+                mmu.interrupts.intf |= 0x02;
+            }
+
             self.draw_scanline(mmu);
             return;
         }

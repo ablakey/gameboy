@@ -5,6 +5,7 @@ use std::io::prelude::*;
 const BOOT_ROM_PATH: &'static str = "data/dmg_rom.bin";
 
 /// The values applied to the final state of the MMU once the boot rom has been run.
+
 pub const BOOTROM_MMU_VALUES: [(u16, u8); 31] = [
     (0xFF05, 0),
     (0xFF06, 0),

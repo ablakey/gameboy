@@ -68,6 +68,7 @@ impl MMU {
         // we skip using the bootloader (probably becuase we don't have a ROM), we can just set the
         // end result.
         if !use_bootrom {
+            println!("DONT USE BOOTROM");
             BOOTROM_MMU_VALUES
                 .iter()
                 .for_each(|(address, value)| mmu.wb(*address, *value));
@@ -82,6 +83,12 @@ impl MMU {
             mmu.l = 0x4D;
             mmu.pc = 0x0100;
             mmu.sp = 0xFFFE;
+            // mmu.interrupts.intf = 1;
+            // mmu.timer.divider = 147;
+            // mmu.ppu.mode = 1;
+            // mmu.ppu.line = 84;  (this seems to get closest, but it's still quite wrong).
+            // mmu.ppu.obj_palette_0 = 0;
+            // mmu.ppu.obj_palette_1 = 0;
         };
 
         mmu
