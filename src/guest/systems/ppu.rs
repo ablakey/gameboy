@@ -1,13 +1,50 @@
 use super::super::mmu::is_bit_set;
 use super::MMU;
 
-pub struct PPU {
-    modeclock: usize, // Current clock step representing where the PPU is in its processing cycle.
-    pub bg_color_zero: [bool; 160], // tracks which pixels in a row have background = 0.
-    pub image_buffer: [u8; 160 * 144],
+/// Given MMU state, coordinates, and the address to the current tilemap, get the pixel value.
+fn get_tile_pixel(mmu: &MMU, x: u8, y: u8, tilemap_address: u16) -> u8 {
+    // Use the LCDC hardware register to determine which of the two tile data spaces in VRAM we
+    // are utilizing. The upper tiledata table beginning at 0x8800 needs to be accessed
+    // with a signed value, indexing on 0x9000.
+    let tiledata_base_address = if mmu.ppu.tile_data_table {
+        0x8000
+    } else {
+        0x8800
+    };
+
+    // There are 1024 tiles mapped in a 32x32 grid of 8x8 pixel tiles. The 1024 tiles are
+    // described in one of the two tile maps as a row-major array. To get the tile number
+    // we divide row and column of the pixel we're looking up by the number of pixels per
+    // tile. We then walk the row-major grid to get the single tile number.
+    let tile_row_num = y / 8;
+    let tile_col_num = x / 8;
+    let tile_number = tile_row_num as u16 * 32 + tile_col_num as u16;
+
+    // We can then look up the tile's data address by accessing the tile map at the offset
+    // address + tile number. To find the address of the correct tile, multiply this address
+    // by 16 (the size of each whole tile's worth of data) and add (or subtract) that to
+    // the tiledata_base_address.
+    // If we are accessing TILEDATA_1, we need to access it with a signed offset.
+    let tile_data_number = mmu.rb(tilemap_address + tile_number);
+    let tile_data_address = get_tile_data_address(tiledata_base_address, tile_data_number);
+
+    // Get the pixel coordinates in the local 8x8 tile.
+    let pixel_row_num = y % 8;
+    let pixel_col_num = x % 8;
+
+    // While tile_data_address is the address of the beginning of the entire tile, the
+    // tile_row_address is the address that the specific row of data where this pixel
+    // is found. We multiply by 2 because every row of 8 pixels is 2 bytes of data.
+    let tile_row_index = tile_data_address + (pixel_row_num as u16 * 2);
+    let tile_data_lower = mmu.rb(tile_row_index);
+    let tile_data_upper = mmu.rb(tile_row_index + 1);
+
+    get_pixel(tile_data_lower, tile_data_upper, pixel_col_num)
 }
 
-/// Convert a tile data offset t
+/// Get the address for tile data, given the base address and a tile number. This way to access
+/// changes based on base address, as one of the two address spaces needs to be indexed
+/// with a singed integer.
 fn get_tile_data_address(base_address: u16, tile_number: u8) -> u16 {
     if base_address == 0x8800 {
         base_address + ((tile_number as i8 as i16 + 128) as u16 * 16)
@@ -16,21 +53,19 @@ fn get_tile_data_address(base_address: u16, tile_number: u8) -> u16 {
     }
 }
 
-fn get_pixel_value(tile_lower: u8, tile_upper: u8, pixel_num: u8) -> u8 {
-    // Get the two bits that describe this pixel's colour.  A row of 8 pixels are described
-    // by two consecutive bytes. The bits however are not consecutive. The first pixel value
-    // is described by the most-significant bit of each byte and so forth.
+/// Get the two bits that describe this pixel's colour.  A row of 8 pixels are described
+/// by two consecutive bytes. The bits however are not consecutive. The first pixel value
+/// is described by the most-significant bit of each byte and so forth.
+fn get_pixel(tile_lower: u8, tile_upper: u8, pixel_num: u8) -> u8 {
     let p0 = (tile_lower >> (7 - pixel_num)) & 0x1;
     let p1 = (tile_upper >> (7 - pixel_num)) & 0x1;
     (p1 << 1) + p0
 }
 
-fn get_palette_color(pixel_value: u8, palette: u8) -> u8 {
-    // Get the palette value for this pixel value.
-    // Multiply by 2 because hwreg.background_palette is 4  2-bit values. To get the
-    // color_value for pixel 00 -> 00,   01 -> 02,  02 -> 04,  03 -> 06.  Mask by 0b11
-    // because the color value is two bits.
-    (palette >> (pixel_value * 2)) & 0x3
+pub struct PPU {
+    modeclock: usize, // Current clock step representing where the PPU is in its processing cycle.
+    pub bg_color_zero: [bool; 160], // tracks which pixels in a row have background = 0.
+    pub image_buffer: [u8; 160 * 144],
 }
 
 impl PPU {
@@ -42,7 +77,7 @@ impl PPU {
         }
     }
 
-    fn set_pixel(&mut self, line: u8, col: u8, value: u8) {
+    fn draw_pixel(&mut self, line: u8, col: u8, value: u8) {
         self.image_buffer[line as usize * 160 + col as usize] = value;
     }
 
@@ -119,9 +154,9 @@ impl PPU {
         // Reset background priority state.
         self.bg_color_zero = [false; 160];
 
-        self.draw_background_scanline(mmu);
+        // self.draw_background_scanline(mmu);
         self.draw_window_scanline(mmu);
-        self.draw_sprites_scanline(mmu);
+        // self.draw_sprites_scanline(mmu);
     }
 
     /// Modify the current line's buffer with sprite data. Sprite pixels may not draw depending on
@@ -212,13 +247,12 @@ impl PPU {
                 // Number of pixel (0-7) of this row of the sprite. Might be horizontally flipped.
                 let pixel_num = if x_flip { 7 - p } else { p };
 
-                let pixel_value =
-                    get_pixel_value(sprite_data_lower, sprite_data_upper, pixel_num as u8);
+                let pixel_value = get_pixel(sprite_data_lower, sprite_data_upper, pixel_num as u8);
 
-                let color = get_palette_color(pixel_value, palette);
+                let color = (palette >> (pixel_value * 2)) & 0x3;
 
                 let col = x_pos + p;
-                self.set_pixel(line as u8, col as u8, color);
+                self.draw_pixel(line as u8, col as u8, color);
             }
         }
     }
@@ -227,20 +261,36 @@ impl PPU {
     /// make the code more understandable. The cost is a bit of repetition and some unnecessary
     /// drawing of background pixels that immediately get covered  up by the window.
     fn draw_window_scanline(&mut self, mmu: &MMU) {
-        if !mmu.ppu.window_on {
+        let ppu = &mmu.ppu;
+
+        if !ppu.window_on {
             return;
         }
 
-        let win_x = mmu.ppu.win_x as isize - 7;
-        let win_y = mmu.ppu.win_y;
+        // The y coord of the top-left of this current line of the window.
+        let win_y = ppu.line as isize - ppu.win_y as isize;
 
-        if win_x < 0 {
+        // Current line is not
+        if win_y < 0 {
             return;
         }
 
-        self.set_pixel(win_y, win_x as u8, 3);
+        let tilemap_address = if ppu.window_tilemap { 0x9C00 } else { 0x9800 };
 
-        println!("{}, {}", win_x, win_y);
+        for x in 0..160u8 {
+            let win_x = (ppu.win_x as isize - 7) + x as isize;
+
+            if win_x < 0 || win_x > 159 {
+                continue;
+            }
+
+            let pixel = get_tile_pixel(mmu, win_x as u8, win_y as u8, tilemap_address);
+
+            println!("{}, {} ({}, {})", ppu.win_x, ppu.win_y, win_x, win_y);
+
+            // self.draw_pixel(ppu.line, x, pixel);
+            self.draw_pixel(ppu.line, x, pixel);
+        }
     }
 
     /// Draw a single scanline by iterating through a line of pixels and getting pixel data from
@@ -254,71 +304,28 @@ impl PPU {
             return;
         }
 
-        // Get window y absolute coordinates. It might be off the screen.
-        let win_y = ppu.line as isize - ppu.win_y as isize;
-
-        // Flags determine which of the two tilemaps and tiledata tables we use.
-        let is_tiledata_low = ppu.tile_data_table;
-        let is_tilemap_high = ppu.bg_tilemap;
-
         // Use the LCDC hardware register to determine which of the two tilemap spaces we are
         // utilizing. They both behave the same in all ways.
-        let tilemap_address = if is_tilemap_high { 0x9C00 } else { 0x9800 };
-
-        // Use the LCDC hardware register to determine which of the two tile data spaces in VRAM we
-        // are utilizing. The upper tiledata table beginning at 0x8800 needs to be accessed
-        // with a signed value, indexing on 0x9000.
-        let tiledata_base_address = if is_tiledata_low { 0x8000 } else { 0x8800 };
-
-        // Scroll offsets.  The tile maps represent a 256x256 scene of pixels. We only want to
-        // render a 160x144 viewport of it.
-        let scy = ppu.scy;
-        let scx = ppu.scx;
+        let tilemap_address = if ppu.bg_tilemap { 0x9C00 } else { 0x9800 };
 
         // We want to iterate through 160 pixels to draw one scanline.
         for col in 0..160u8 {
             // Calculate tilemap pixel indexes by adding the current pixel x,y with the scroll
             // register values. This accounts for the viewport we want to draw not being the same
             // as the 256x256 tilemap scene.
-            let x = col.wrapping_add(scx);
-            let y = ppu.line.wrapping_add(scy);
+            let x = col.wrapping_add(ppu.scx);
+            let y = ppu.line.wrapping_add(ppu.scy);
 
-            // There are 1024 tiles mapped in a 32x32 grid of 8x8 pixel tiles. The 1024 tiles are
-            // described in one of the two tile maps as a row-major array. To get the tile number
-            // we divide row and column of the pixel we're looking up by the number of pixels per
-            // tile. We then walk the row-major grid to get the single tile number.
-            let tile_row_num = y / 8;
-            let tile_col_num = x / 8;
-            let tile_number = tile_row_num as u16 * 32 + tile_col_num as u16;
+            let pixel_value = get_tile_pixel(mmu, x, y, tilemap_address);
 
-            // We can then look up the tile's data address by accessing the tile map at the offset
-            // address + tile number. To find the address of the correct tile, multiply this address
-            // by 16 (the size of each whole tile's worth of data) and add (or subtract) that to
-            // the tiledata_base_address.
-            // // If we are accessing TILEDATA_1, we need to access it with a signed offset.
-            let tile_data_number = mmu.rb(tilemap_address + tile_number);
-            let tile_data_address = get_tile_data_address(tiledata_base_address, tile_data_number);
-
-            // Get the pixel coordinates in the local 8x8 tile.
-            let pixel_row_num = y % 8;
-            let pixel_col_num = x % 8;
-
-            // While tile_data_address is the address of the beginning of the entire tile, the
-            // tile_row_address is the address that the specific row of data where this pixel
-            // is found. We multiply by 2 because every row of 8 pixels is 2 bytes of data.
-            let tile_row_index = tile_data_address + (pixel_row_num as u16 * 2);
-            let tile_data_lower = mmu.rb(tile_row_index);
-            let tile_data_upper = mmu.rb(tile_row_index + 1);
-
-            let pixel_value = get_pixel_value(tile_data_lower, tile_data_upper, pixel_col_num);
-            let color = get_palette_color(pixel_value, ppu.background_palette);
+            let color = (ppu.background_palette >> (pixel_value * 2)) & 0x3;
 
             // Set background priority.
             self.bg_color_zero[col as usize] = pixel_value == 0;
 
             // Update the image buffer with this pixel value. Given a well-behaved main loop should
             // iterate through every pixel, there is no need to clear the previous buffer data.
-            self.set_pixel(ppu.line, x, color);
+            self.draw_pixel(ppu.line, col, color);
         }
     }
 }
