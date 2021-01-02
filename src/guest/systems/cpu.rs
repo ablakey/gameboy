@@ -689,7 +689,7 @@ impl CPU {
         mmu.interrupts.tick_ime_timer();
 
         // Check LYC every step.
-        mmu.check_lyc_interrupt();
+        // mmu.check_lyc_interrupt(); // TODO: maybe put this back. It's in GPU now.
 
         // Try to handle an interrupt. If none was handled, try to do an opcode if not halted.
         match mmu.try_interrupt() {

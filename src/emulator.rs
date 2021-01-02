@@ -65,11 +65,11 @@ impl Emulator {
             // CPU step.
             let cycles = self.cpu.step(mmu);
 
-            // PPU step.
-            self.ppu.step(mmu, cycles);
-
             // Timer step.
             self.timer.step(mmu, cycles);
+
+            // PPU step.
+            self.ppu.step(mmu, cycles);
 
             // 4Mhz cpu at 60fps.
             cycle_count += cycles as usize;

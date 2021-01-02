@@ -38,7 +38,7 @@ impl PPU {
         Self {
             modeclock: 0,
             bg_color_zero: [false; 160],
-            image_buffer: [1; 160 * 144],
+            image_buffer: [0; 160 * 144],
         }
     }
 
@@ -48,9 +48,13 @@ impl PPU {
 
     /// TODO: explain the mode cycle and clocks.
     pub fn step(&mut self, mmu: &mut MMU, cycles: u8) {
+        // The screen might be cleared entirely because the PPU's state has it shut off. Note that
+        // line and mode were also set to 0 (in the ppu )
         if mmu.ppu.clear_screen {
-            self.image_buffer = [1; 160 * 144];
+            self.image_buffer = [0; 160 * 144];
             self.modeclock = 0;
+            mmu.ppu.line = 0;
+            mmu.ppu.mode = 0;
             mmu.ppu.clear_screen = false; // Reset flag.
         }
 
@@ -62,70 +66,48 @@ impl PPU {
         // self.modeclock. That allows excessive cycles to be carried over to the next mode.
         self.modeclock += cycles as usize;
 
-        // HBlank. Upon entering this state, we would have successfully drawn a line and are
-        // moving on to the next line or vblank.
-        // Transitions to: Mode 1 (VBlank) or Mode 2 (OAM Read)
-        if mode == 0 && self.modeclock >= 204 {
-            self.modeclock -= 204;
-            mmu.ppu.line += 1; // Advance 1 line as we're in hblank.
+        if self.modeclock >= 456 {
+            self.modeclock -= 456;
+            mmu.ppu.line = (mmu.ppu.line + 1) % 154;
+            mmu.check_lyc_interrupt();
 
-            // At the end of hblank, if on line 143, we've drawn all 144 lines and need to enter
-            // vblank. Otherwise go back to mode 2 and loop again.
-            if mmu.ppu.line == 143 {
+            // VBlank line.
+            if mmu.ppu.line >= 144 && mode != 1 {
                 mmu.ppu.mode = 1;
 
                 // LCDC Status interrupt entering mode 1?
-                if mmu.ppu.mode1_int_enable {
-                    mmu.interrupts.intf |= 0x02;
+                // if mmu.ppu.mode1_int_enable {
+                //     mmu.interrupts.intf |= 0x02;
+                // }
+                // mmu.interrupts.intf |= 0x01; // Set Vblank interrupt flag.
+            }
+        }
+
+        // Only handle mode changes if we're in a normal line.
+        if mmu.ppu.line < 144 {
+            // Determine if mode should change and interrupt should be set.
+            let change_mode = match self.modeclock {
+                0..=80 if mode != 2 => Some((2, mmu.ppu.mode2_int_enable)),
+                81..=252 if mode != 3 => Some((3, false)),
+                253..=455 if mode != 0 => Some((0, mmu.ppu.mode0_int_enable)),
+                _ => None,
+            };
+
+            // Change mode and possibly set interrupt.
+            match change_mode {
+                Some((next_mode, set_interrupt)) => {
+                    mmu.ppu.mode = next_mode;
+                    if set_interrupt {
+                        mmu.interrupts.intf |= 0x02;
+                    }
+
+                    // Draw the line only when mode switches to 0.
+                    if next_mode == 0 {
+                        self.draw_scanline(mmu);
+                    }
                 }
-                // TODO: setting interrupt is more detailed than this.
-                mmu.interrupts.intf |= 0x01; // Set Vblank interrupt flag.
-            } else {
-                mmu.ppu.mode = 2;
+                None => {}
             }
-        }
-
-        // VBlank. This runs for 10 lines (4560 cycles) and increments hwreg.ly. It is valid
-        // for hwreg.ly to be a value of 144 to 152, representing when it is in vblank.
-        // Transitions to: Mode 2 (OAM Read)
-        if mode == 1 && self.modeclock >= 456 {
-            self.modeclock -= 456;
-
-            if mmu.ppu.line == 153 {
-                mmu.ppu.mode = 2;
-                mmu.ppu.line = 0;
-
-                // LCDC Status interrupt entering mode 2?
-                if mmu.ppu.mode2_int_enable {
-                    mmu.interrupts.intf |= 0x02;
-                }
-            } else {
-                mmu.ppu.line += 1;
-            }
-        }
-
-        // OAM Read mode.
-        // Note that we're not doing OAM read here. We're just simulating the amount of time that
-        // the original hardware would take to OAM read. This is necessary to keep all timing
-        // in sync. When OAM is needed, it will be read at what's effectively instantaneous speed.
-        if mode == 2 && self.modeclock >= 80 {
-            self.modeclock -= 80;
-            mmu.ppu.mode = 3;
-            return;
-        }
-
-        // VRAM read mode. End of mode 3 acts as end of scanline.
-        if mode == 3 && self.modeclock >= 172 {
-            self.modeclock -= 172;
-            mmu.ppu.mode = 0;
-
-            // LCDC Status interrupt entering mode 0?
-            if mmu.ppu.mode0_int_enable {
-                mmu.interrupts.intf |= 0x02;
-            }
-
-            self.draw_scanline(mmu);
-            return;
         }
     }
 
@@ -138,6 +120,7 @@ impl PPU {
         self.bg_color_zero = [false; 160];
 
         self.draw_background_scanline(mmu);
+        self.draw_window_scanline(mmu);
         self.draw_sprites_scanline(mmu);
     }
 
@@ -240,15 +223,39 @@ impl PPU {
         }
     }
 
+    /// Draw the window. This is very similar to the background but is implemented separately to
+    /// make the code more understandable. The cost is a bit of repetition and some unnecessary
+    /// drawing of background pixels that immediately get covered  up by the window.
+    fn draw_window_scanline(&mut self, mmu: &MMU) {
+        if !mmu.ppu.window_on {
+            return;
+        }
+
+        let win_x = mmu.ppu.win_x as isize - 7;
+        let win_y = mmu.ppu.win_y;
+
+        if win_x < 0 {
+            return;
+        }
+
+        self.set_pixel(win_y, win_x as u8, 3);
+
+        println!("{}, {}", win_x, win_y);
+    }
+
     /// Draw a single scanline by iterating through a line of pixels and getting pixel data from
     /// the relevant tiles. Only a subset of the 256x256 scene is displayed, so we are not always
     /// drawing complete tiles. There's also wrap-around possible.
     fn draw_background_scanline(&mut self, mmu: &MMU) {
-        // if mmu.ppu.window_bg_on {
-        //     return;
-        // }
-
         let ppu = &mmu.ppu;
+
+        // If LCDC0 (window and bg on) is false, don't draw anything.
+        if !ppu.window_bg_on {
+            return;
+        }
+
+        // Get window y absolute coordinates. It might be off the screen.
+        let win_y = ppu.line as isize - ppu.win_y as isize;
 
         // Flags determine which of the two tilemaps and tiledata tables we use.
         let is_tiledata_low = ppu.tile_data_table;

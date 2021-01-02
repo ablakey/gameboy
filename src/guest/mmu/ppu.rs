@@ -97,7 +97,6 @@ impl PpuRegisters {
         match address {
             0xFF40 => {
                 let was_lcd_on = self.lcd_on;
-                // TODO: I think some other values need to be reset if lcd_on gets toggled.
                 self.lcd_on = is_bit_set(value, 7);
                 self.window_tilemap = is_bit_set(value, 6);
                 self.window_on = is_bit_set(value, 5);
@@ -107,10 +106,8 @@ impl PpuRegisters {
                 self.sprite_on = is_bit_set(value, 1);
                 self.window_bg_on = is_bit_set(value, 0);
 
-                // LCD was turned off.
+                // LCD was turned off. Set a flag telling PPU system to clear screen and reset.
                 if was_lcd_on && !self.lcd_on {
-                    self.line = 0;
-                    self.mode = 0;
                     self.clear_screen = true;
                 }
             }

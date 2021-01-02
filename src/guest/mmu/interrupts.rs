@@ -63,7 +63,7 @@ impl Interrupts {
 
     /// Try to handle an interrupt, if any.
     /// This happens on every CPU step, but most of the time returns 0 as there's no interrupt
-    /// to handle. Returns an interrupt index if an interrupt is to be handled.
+    /// to handle. Returns an interrupt index if an interrupt that is to be handled.
     pub fn try_interrupt(&mut self) -> Option<u8> {
         // If IME is disabled and we're not halted, there isnt any interrupt handling to do.
         if !self.ime && !self.is_halted {
