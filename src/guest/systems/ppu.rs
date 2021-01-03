@@ -172,47 +172,47 @@ impl PPU {
             return;
         };
 
-        let mut drawn_sprite_count = 0;
+        // Walk through 40 sprites in OAM memory and collect the first 10 that draw on this line.
+        let mut sprites_to_draw: Vec<u8> = Vec::new();
 
-        // Walk through all 40 sprites in OAM memory. We need to draw the ones whose coordinates
-        // put them within the viewframe.
         for s in 0..40 {
-            // Draw max 10 sprites per line.
-            if drawn_sprite_count == 10 {
+            if sprites_to_draw.len() == 10 {
                 break;
             }
 
+            // Get the sprite. Does it get drawn on this line and is on screen?
+            let oam_address = 0xFE00 + s * 4;
+            let y_pos = mmu.rb(oam_address) as isize - 16;
+            let x_pos = mmu.rb(oam_address + 1) as isize - 8;
+
+            if line < y_pos || line >= y_pos + sprite_y_size || x_pos < -7 || x_pos >= 160 {
+                continue;
+            }
+
+            sprites_to_draw.push(s as u8);
+        }
+
+        // There's now up to 10 sprites (stored as simple OAM sprite index numbers) to be drawn.
+        // iterate this list in reverse to draw, because the earlier sprites in OAM get priority.
+        // Note: we already verified that these sprites should be drawn.
+        for &s in sprites_to_draw.iter().rev() {
             // Parse four bytes of data representing the coordinates, sprite number, and flags.
             // The positions are handled as signed integers to allow them to be off the screen.
             // If they remain off the screen when added to the line number or column, they will
             // ultimately not be drawn.
-            let oam_address = 0xFE00 + s * 4;
+            let oam_address = 0xFE00 + s as u16 * 4;
             let y_pos = mmu.rb(oam_address) as isize - 16;
             let x_pos = mmu.rb(oam_address + 1) as isize - 8;
             let sprite_number = mmu.rb(oam_address + 2) as u16;
             let flags = mmu.rb(oam_address + 3);
-
             let palette = if is_bit_set(flags, 4) {
                 ppu.obj_palette_1
             } else {
                 ppu.obj_palette_0
             };
-
             let bg_priority = is_bit_set(flags, 7);
             let y_flip = is_bit_set(flags, 6);
             let x_flip = is_bit_set(flags, 5);
-
-            // Is the sprite not on this line?
-            if line < y_pos || line >= y_pos + sprite_y_size {
-                continue;
-            }
-
-            // Is the sprite off the left or right of the screen?
-            if x_pos < -7 || x_pos >= 160 {
-                continue;
-            }
-
-            drawn_sprite_count += 1;
 
             // Get the y-coordinate of the current sprite. A sprite is 8 or 16 rows tall.
             // Depending on what line we're rendering, we get one of those lines to draw onto it.
@@ -246,13 +246,10 @@ impl PPU {
 
                 // Number of pixel (0-7) of this row of the sprite. Might be horizontally flipped.
                 let pixel_num = if x_flip { 7 - p } else { p };
-
                 let pixel_value = get_pixel(sprite_data_lower, sprite_data_upper, pixel_num as u8);
-
                 let color = (palette >> (pixel_value * 2)) & 0x3;
 
-                let col = x_pos + p;
-                self.draw_pixel(line as u8, col as u8, color);
+                self.draw_pixel(line as u8, (x_pos + p) as u8, color);
             }
         }
     }
