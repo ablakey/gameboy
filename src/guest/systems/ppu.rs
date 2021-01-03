@@ -111,10 +111,10 @@ impl PPU {
                 mmu.ppu.mode = 1;
 
                 // LCDC Status interrupt entering mode 1?
-                // if mmu.ppu.mode1_int_enable {
-                //     mmu.interrupts.intf |= 0x02;
-                // }
-                // mmu.interrupts.intf |= 0x01; // Set Vblank interrupt flag.
+                if mmu.ppu.mode1_int_enable {
+                    mmu.interrupts.intf |= 0x02;
+                }
+                mmu.interrupts.intf |= 0x01; // Set Vblank interrupt flag.
             }
         }
 
@@ -154,9 +154,9 @@ impl PPU {
         // Reset background priority state.
         self.bg_color_zero = [false; 160];
 
-        // self.draw_background_scanline(mmu);
+        self.draw_background_scanline(mmu);
         self.draw_window_scanline(mmu);
-        // self.draw_sprites_scanline(mmu);
+        self.draw_sprites_scanline(mmu);
     }
 
     /// Modify the current line's buffer with sprite data. Sprite pixels may not draw depending on
@@ -278,17 +278,15 @@ impl PPU {
         let tilemap_address = if ppu.window_tilemap { 0x9C00 } else { 0x9800 };
 
         for x in 0..160u8 {
-            let win_x = (ppu.win_x as isize - 7) + x as isize;
+            let win_x = 0 - (ppu.win_x as isize - 7) + x as isize;
 
-            if win_x < 0 || win_x > 159 {
+            // The window draws off the screen for this pixel.
+            if win_x < 0 || win_x >= 160 {
                 continue;
             }
 
             let pixel = get_tile_pixel(mmu, win_x as u8, win_y as u8, tilemap_address);
 
-            println!("{}, {} ({}, {})", ppu.win_x, ppu.win_y, win_x, win_y);
-
-            // self.draw_pixel(ppu.line, x, pixel);
             self.draw_pixel(ppu.line, x, pixel);
         }
     }
