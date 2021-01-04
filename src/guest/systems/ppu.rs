@@ -172,38 +172,49 @@ impl PPU {
             return;
         };
 
-        // Walk through 40 sprites in OAM memory and collect the first 10 that draw on this line.
-        let mut sprites_to_draw: Vec<u8> = Vec::new();
+        let mut sprites_to_draw: Vec<(u8, u8, u8)> = Vec::new();
 
-        for s in 0..40 {
+        // Walk through 40 sprites in OAM memory and collect the first 10 that draw on this line.
+        // Note that we hold on to x_pos and idx because they're needed for sorting and access.
+        // We hold on to y_pos just because: we've already read it, may as well hang on to it.
+        for idx in 0..40 {
             if sprites_to_draw.len() == 10 {
                 break;
             }
 
             // Get the sprite. Does it get drawn on this line and is on screen?
-            let oam_address = 0xFE00 + s * 4;
+            let oam_address = 0xFE00 + idx * 4;
             let y_pos = mmu.rb(oam_address) as isize - 16;
             let x_pos = mmu.rb(oam_address + 1) as isize - 8;
 
+            // The sprite is not on the screen at this line.
             if line < y_pos || line >= y_pos + sprite_y_size || x_pos < -7 || x_pos >= 160 {
                 continue;
             }
 
-            sprites_to_draw.push(s as u8);
+            sprites_to_draw.push((x_pos as u8, y_pos as u8, idx as u8));
         }
 
-        // There's now up to 10 sprites (stored as simple OAM sprite index numbers) to be drawn.
-        // iterate this list in reverse to draw, because the earlier sprites in OAM get priority.
-        // Note: we already verified that these sprites should be drawn.
-        for &s in sprites_to_draw.iter().rev() {
+        // Now that we have 10, sort them by priority:
+        // - if the sprites overlap on the x axis, the lower x_pos is on top.
+        // - if sprites overlap fully (same x_pos) the earlier object is on top.
+        // This is accomplished by performing a stable sort based on the x_pos.
+        sprites_to_draw.sort_by(|(a, _, _), (b, _, _)| a.partial_cmp(b).unwrap());
+
+        // There's now up to 10 sprites to be drawn. Iterate this list in reverse to draw, because
+        // the earlier sprites in OAM get priority. Note: we already verified that these sprites
+        // should be drawn.
+        for &(x_pos, y_pos, idx) in sprites_to_draw.iter().rev() {
             // Parse four bytes of data representing the coordinates, sprite number, and flags.
             // The positions are handled as signed integers to allow them to be off the screen.
             // If they remain off the screen when added to the line number or column, they will
             // ultimately not be drawn.
-            let oam_address = 0xFE00 + s as u16 * 4;
-            let y_pos = mmu.rb(oam_address) as isize - 16;
-            let x_pos = mmu.rb(oam_address + 1) as isize - 8;
-            let sprite_number = mmu.rb(oam_address + 2) as u16;
+            let oam_address = 0xFE00 + idx as u16 * 4;
+
+            // If the sprite is 8x16, bit 0 in the sprite_number is ignored.
+            let sprite_number =
+                (mmu.rb(oam_address + 2) & if sprite_y_size == 16 { 0xFE } else { 0xFF }) as u16;
+
             let flags = mmu.rb(oam_address + 3);
             let palette = if is_bit_set(flags, 4) {
                 ppu.obj_palette_1
@@ -218,9 +229,9 @@ impl PPU {
             // Depending on what line we're rendering, we get one of those lines to draw onto it.
             // If y_flip is true, we invert which line we're getting.
             let sprite_y = if y_flip {
-                (sprite_y_size - 1 - (line - y_pos)) as u16
+                (sprite_y_size - 1 - (line - y_pos as isize)) as u16
             } else {
-                (line - y_pos) as u16
+                (line - y_pos as isize) as u16
             };
 
             // Calculate data address of the data for this line of the sprite.
@@ -233,14 +244,15 @@ impl PPU {
             let sprite_data_upper = mmu.rb(sprite_data_address + 1);
 
             // Walk through each pixel to be drawn.
-            for p in 0..8isize {
-                // Is this specific pixel not on the screen?
-                if x_pos + p < 0 || x_pos + p >= 160 {
+            for p in 0..8u8 {
+                // Is this specific pixel not on the screen? We already check that x_pos is not off
+                // the left side earlier, so only need to check that it's not off the right side.
+                if x_pos + p >= 160 {
                     continue;
                 }
 
                 // Don't draw if hiding under the background.
-                if mmu.ppu.window_bg_on && bg_priority && !self.bg_color_zero[x_pos as usize] {
+                if !mmu.ppu.window_bg_on && bg_priority && !self.bg_color_zero[x_pos as usize] {
                     continue;
                 }
 
@@ -248,6 +260,11 @@ impl PPU {
                 let pixel_num = if x_flip { 7 - p } else { p };
                 let pixel_value = get_pixel(sprite_data_lower, sprite_data_upper, pixel_num as u8);
                 let color = (palette >> (pixel_value * 2)) & 0x3;
+
+                // For sprites, color 0 is transparency so don't draw anything.
+                if color == 0 {
+                    continue;
+                }
 
                 self.draw_pixel(line as u8, (x_pos + p) as u8, color);
             }
@@ -312,11 +329,10 @@ impl PPU {
             let y = ppu.line.wrapping_add(ppu.scy);
 
             let pixel_value = get_tile_pixel(mmu, x, y, tilemap_address);
-
             let color = (ppu.background_palette >> (pixel_value * 2)) & 0x3;
 
             // Set background priority.
-            self.bg_color_zero[col as usize] = pixel_value == 0;
+            self.bg_color_zero[col as usize] = color == 0;
 
             // Update the image buffer with this pixel value. Given a well-behaved main loop should
             // iterate through every pixel, there is no need to clear the previous buffer data.
