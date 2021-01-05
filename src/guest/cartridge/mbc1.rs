@@ -26,8 +26,9 @@ impl Mbc for Mbc1 {
                 // For example, if ROM bank 2 is selected (the third 16KB), the offset is 32KB.
                 // The address begins at 0x4000 so we subtract 1 bank.  Bank 0 cannot be accessed
                 // from here.
-                let offset = 0x4000 * (self.rom_bank_number - 1) as u16;
-                self.data[(address + offset) as usize]
+
+                let offset = 0x4000 * self.rom_bank_number as usize;
+                self.data[(address as usize - 0x4000) + offset]
             }
             0xA000..=0xBFFF => {
                 println!("Read RAM");

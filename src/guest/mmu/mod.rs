@@ -109,9 +109,11 @@ impl MMU {
             0x0000..=0x7FFF => self.cartridge.rb(address),
             0x8000..=0x9FFF => self.vram[(address - 0x8000) as usize],
             0xC000..=0xDFFF => self.sram[(address - 0xC000) as usize],
+            0xE000..=0xFDFF => self.sram[(address - 0xC000 - 0x2000) as usize], // Mirror 0xC000.
             0xFE00..=0xFE9F => self.oam[(address - 0xFE00) as usize],
             0xFEA0..=0xFEFF => 0xFF,
             0xFF00 => self.gamepad,
+            0xFF0f => self.interrupts.intf,
             0xFF01 => 0, // TODO: serial write.
             0xFF02 => 0, // TODO: serial control.
             0xFF04..=0xFF07 => self.timer.rb(address),
@@ -136,8 +138,8 @@ impl MMU {
             0xFE00..=0xFE9F => self.oam[(address - 0xFE00) as usize] = value,
             0xFEA0..=0xFEFF => (),
             0xFF00 => self.gamepad = value,
-            0xFF01 => (), // TODO: serial write.
-            0xFF02 => (), // TODO: serial control.
+            0xFF01 => println!("{}", value as char), // TODO: serial
+            0xFF02 => (),                            // TODO: serial control.
             0xFF04..=0xFF07 => self.timer.wb(address, value),
             0xFF0F => self.interrupts.intf = value,
             0xFF10..=0xFF3F => self.apu.wb(address, value),

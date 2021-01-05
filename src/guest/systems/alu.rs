@@ -89,7 +89,7 @@ pub fn add(mmu: &mut MMU, value: u8) {
 /// The carry is the same concept but for bit 15. Instead of causing an overflow, we just check to
 /// see if there would be one.
 /// Flags: [- 0 H C]
-pub fn add_16(mmu: &mut MMU, value: u16) {
+pub fn add_hl_16(mmu: &mut MMU, value: u16) {
     let hl = mmu.hl();
     let (new_hl, overflow) = hl.overflowing_add(value);
     mmu.set_flag_n(false);
@@ -138,6 +138,33 @@ pub fn rl(mmu: &mut MMU, value: u8) -> u8 {
 pub fn rlc(mmu: &mut MMU, value: u8) -> u8 {
     let has_carry = value & 0x80 == 0x80;
     let new_value = value << 1 | has_carry as u8;
+    mmu.set_flag_z(new_value == 0);
+    mmu.set_flag_h(false);
+    mmu.set_flag_n(false);
+    mmu.set_flag_c(has_carry); // If the value's MSB is 1, there's a carry.
+    new_value
+}
+
+/// Rotate bits right through carry.
+/// This means that we shift right, and the MSB becomes the LSB. Except "through carry" means
+/// We act as if the carry is part of that ring: MSB becomes carry, old carry becomes LSB.
+/// Flags: [Z 0 0 C]
+// Note: The mnemonic is weird.  RR is through carry. RRC is not.
+pub fn rr(mmu: &mut MMU, value: u8) -> u8 {
+    let has_carry = value & 0x01 == 0x01;
+    let new_value = value >> 1 | value & if mmu.flag_c() { 0x80 } else { 0x00 };
+    mmu.set_flag_z(new_value == 0);
+    mmu.set_flag_h(false);
+    mmu.set_flag_n(false);
+    mmu.set_flag_c(has_carry); // If the value's LSB is 1, there's a carry.
+    new_value
+}
+
+/// Rotate bits right.
+/// Flags: [Z 0 0 C]
+pub fn rrc(mmu: &mut MMU, value: u8) -> u8 {
+    let has_carry = value & 0x01 == 0x01;
+    let new_value = value >> 1 | if has_carry { 0x80 } else { 0x00 };
     mmu.set_flag_z(new_value == 0);
     mmu.set_flag_h(false);
     mmu.set_flag_n(false);
@@ -203,6 +230,19 @@ pub fn sla(mmu: &mut MMU, value: u8) -> u8 {
     new_value
 }
 
+/// Shift Right Arithmetic.
+/// This means to shift everything right by 1.  The LSB gets set on C (carry) and the MSB is 0.
+/// Flags: [Z 0 0 C]
+pub fn sra(mmu: &mut MMU, value: u8) -> u8 {
+    let msb = value & 0x80;
+    let new_value = (value >> 1) | msb; // Populate new MSB with whatever was in MSB.
+    mmu.set_flag_z(new_value == 0);
+    mmu.set_flag_n(false);
+    mmu.set_flag_h(false);
+    mmu.set_flag_c(value & 0x01 == 0x01); // LSB was high, there's a carry (borrow).
+    new_value
+}
+
 /// Shift Right Logic.
 /// Flags: [Z 0 0 C]
 /// TODO: tests.
@@ -211,7 +251,7 @@ pub fn srl(mmu: &mut MMU, value: u8) -> u8 {
     mmu.set_flag_z(new_value == 0);
     mmu.set_flag_n(false);
     mmu.set_flag_h(false);
-    mmu.set_flag_c(value & 0x1 == 0x1); // Far-right bit was high.
+    mmu.set_flag_c(value & 0x01 == 0x01); // LSB was high, there's a carry (borrow).
     return new_value;
 }
 
@@ -295,7 +335,7 @@ mod tests {
 
     #[test]
     fn test_inc() {
-        let mmu = &mut MMU::new(None, false);
+        let mmu = &mut MMU::new(None, true);
         mmu.a = 0xFF;
         mmu.a = inc(mmu, mmu.a);
         assert_eq!(mmu.a, 0x0);
@@ -304,7 +344,7 @@ mod tests {
 
     #[test]
     fn test_dec() {
-        let mmu = &mut MMU::new(None, false);
+        let mmu = &mut MMU::new(None, true);
         mmu.a = 0x10; // There will be a half-borrow.
         mmu.a = dec(mmu, mmu.a);
         assert_eq!(mmu.a, 0x0F);
@@ -313,7 +353,7 @@ mod tests {
 
     #[test]
     fn test_xor() {
-        let mmu = &mut MMU::new(None, false);
+        let mmu = &mut MMU::new(None, true);
         xor(mmu, 0x11);
         assert_eq!(mmu.a, 0x11);
         assert_flags!(mmu, false, false, false, false);
@@ -330,7 +370,7 @@ mod tests {
 
     #[test]
     fn test_bit() {
-        let mmu = &mut MMU::new(None, false);
+        let mmu = &mut MMU::new(None, true);
         mmu.a = 0b00001000;
         bit(mmu, 3, mmu.a);
         assert_flags!(mmu, false, false, true, false);
@@ -342,7 +382,7 @@ mod tests {
 
     #[test]
     fn test_sub() {
-        let mmu = &mut MMU::new(None, false);
+        let mmu = &mut MMU::new(None, true);
         mmu.a = 0x10;
         sub(mmu, 0xFF);
         assert_eq!(mmu.a, 0x11);
@@ -351,7 +391,7 @@ mod tests {
 
     #[test]
     fn test_sub_no_borrows() {
-        let mmu = &mut MMU::new(None, false);
+        let mmu = &mut MMU::new(None, true);
         mmu.a = 0xFF;
         sub(mmu, 0xFF);
         assert_eq!(mmu.a, 0x00);
@@ -360,7 +400,7 @@ mod tests {
 
     #[test]
     fn test_cp() {
-        let mmu = &mut MMU::new(None, false);
+        let mmu = &mut MMU::new(None, true);
         mmu.a = 0x10;
         cp(mmu, 0xFF);
         assert_eq!(mmu.a, 0x10); // Does not get changed.
@@ -369,7 +409,7 @@ mod tests {
 
     #[test]
     fn test_cp_no_borrows() {
-        let mmu = &mut MMU::new(None, false);
+        let mmu = &mut MMU::new(None, true);
         mmu.a = 0xFF;
         cp(mmu, 0xFF);
         assert_eq!(mmu.a, 0xFF);
@@ -378,7 +418,7 @@ mod tests {
 
     #[test]
     fn test_rl() {
-        let mmu = &mut MMU::new(None, false);
+        let mmu = &mut MMU::new(None, true);
         let result = rl(mmu, 0b10000001);
 
         // MSB becomes carry (c=true), LSB is 0 (carry was false). Shift left.
@@ -388,7 +428,7 @@ mod tests {
 
     #[test]
     fn test_add() {
-        let mmu = &mut MMU::new(None, false);
+        let mmu = &mut MMU::new(None, true);
         mmu.a = 0xFF;
         add(mmu, 0xFF);
         assert_eq!(mmu.a, 0xFE);
@@ -397,7 +437,7 @@ mod tests {
 
     #[test]
     fn test_add_no_carry() {
-        let mmu = &mut MMU::new(None, false);
+        let mmu = &mut MMU::new(None, true);
         mmu.a = 0x00;
         add(mmu, 0xE);
         assert_eq!(mmu.a, 0xE);
@@ -406,7 +446,7 @@ mod tests {
 
     #[test]
     fn test_or() {
-        let mmu = &mut MMU::new(None, false);
+        let mmu = &mut MMU::new(None, true);
         or(mmu, 0x11);
         assert_eq!(mmu.a, 0x11);
         assert_flags!(mmu, false, false, false, false);
@@ -423,7 +463,7 @@ mod tests {
 
     #[test]
     fn test_and() {
-        let mmu = &mut MMU::new(None, false);
+        let mmu = &mut MMU::new(None, true);
         and(mmu, 0x11);
         assert_eq!(mmu.a, 0x00);
         assert_flags!(mmu, true, false, true, false);
@@ -445,7 +485,7 @@ mod tests {
 
     #[test]
     fn test_cpl() {
-        let mmu = &mut MMU::new(None, false);
+        let mmu = &mut MMU::new(None, true);
         mmu.a = 0b10101100;
         cpl(mmu);
         assert_eq!(mmu.a, 0b01010011); // The inverse of all bits.
@@ -454,20 +494,20 @@ mod tests {
 
     #[test]
     fn test_swap() {
-        let mmu = &mut MMU::new(None, false);
+        let mmu = &mut MMU::new(None, true);
         let result = swap(mmu, 0b11110000);
         assert_eq!(result, 0b00001111);
         assert_flags!(mmu, false, false, false, false);
     }
 
     #[test]
-    fn test_add_16() {
-        let mmu = &mut MMU::new(None, false);
-        add_16(mmu, 0xFFFF);
+    fn test_add_hl_16() {
+        let mmu = &mut MMU::new(None, true);
+        add_hl_16(mmu, 0xFFFF);
         assert_eq!(mmu.hl(), 0xFFFF);
         assert_flags!(mmu, false, false, false, false);
 
-        add_16(mmu, 0xFFFF); // Both overflows.
+        add_hl_16(mmu, 0xFFFF); // Both overflows.
         assert_eq!(mmu.hl(), 0xFFFE);
         assert_flags!(mmu, false, false, true, true);
     }
@@ -488,7 +528,7 @@ mod tests {
 
     #[test]
     fn test_sla() {
-        let mmu = &mut MMU::new(None, false);
+        let mmu = &mut MMU::new(None, true);
         assert_eq!(sla(mmu, 0b10000001), 0b00000010);
         assert_flags!(mmu, false, false, false, true);
 
@@ -498,7 +538,7 @@ mod tests {
 
     #[test]
     fn test_rlc() {
-        let mmu = &mut MMU::new(None, false);
+        let mmu = &mut MMU::new(None, true);
         let result = rlc(mmu, 0b10000001);
 
         // MSB becomes carry (c=true), LSB is 0 (carry was false). Shift left.
@@ -508,7 +548,7 @@ mod tests {
 
     #[test]
     fn test_adc() {
-        let mmu = &mut MMU::new(None, false);
+        let mmu = &mut MMU::new(None, true);
         mmu.set_flag_c(true);
         mmu.a = 0xFF;
         adc(mmu, 0xFF);

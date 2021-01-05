@@ -84,6 +84,10 @@ impl ApuRegisters {
 
     pub fn rb(&self, address: u16) -> u8 {
         match address {
+            0xFF14 => self.nr14, // TODO: not correct. Only bit 6 can be read?
+            0xFF19 => self.nr24,
+            0xFF1E => self.nr34,
+            0xFF23 => self.nr44,
             _ => panic!(
                 "Tried to get a hardware register wtih invalid address {:x}",
                 address

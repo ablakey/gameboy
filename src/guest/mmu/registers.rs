@@ -37,10 +37,19 @@ impl MMU {
     create_flag!(flag_h, set_flag_h, 5);
     create_flag!(flag_c, set_flag_c, 4);
 
-    create_register_pair!(af, set_af, a, f);
+    // AF needs custom get/set logic because the lowest 4 bits of F are always 0.
+    create_register_pair!(_af, _set_af, a, f);
     create_register_pair!(bc, set_bc, b, c);
     create_register_pair!(de, set_de, d, e);
     create_register_pair!(hl, set_hl, h, l);
+
+    pub fn af(&self) -> u16 {
+        self._af() & 0xFFF0
+    }
+
+    pub fn set_af(&mut self, value: u16) {
+        self._set_af(value & 0xFFF0);
+    }
 }
 
 #[cfg(test)]
@@ -53,8 +62,8 @@ mod tests {
     fn test_af() {
         let mut mmu = MMU::new(None, false);
         mmu.a = 0xFF;
-        mmu.f = 0x11;
-        assert_eq!(mmu.af(), 0xFF11)
+        mmu.f = 0x10;
+        assert_eq!(mmu.af(), 0xFF10)
     }
 
     /// Test getting the af register. Given each register is implemented using a macro, we only need
@@ -64,7 +73,7 @@ mod tests {
         let mut mmu = MMU::new(None, false);
         mmu.set_af(0xFF11);
         assert_eq!(mmu.a, 0xFF);
-        assert_eq!(mmu.f, 0x11);
+        assert_eq!(mmu.f, 0x10);
     }
 
     #[test]
