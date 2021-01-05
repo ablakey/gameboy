@@ -253,6 +253,7 @@ impl PPU {
                 // Is this specific pixel not on the screen? We already check that x_pos is not off
                 // the left side earlier, so only need to check that it's not off the right side.
                 if x_pos + p >= 160 {
+                    // TODO: add with overflow when SML left side of screen.
                     continue;
                 }
 
@@ -306,7 +307,6 @@ impl PPU {
                 continue;
             }
 
-            println!("{}, {}", win_x, self.window_line_draw_count);
             let pixel = get_tile_pixel(
                 mmu,
                 win_x as u8,

@@ -78,6 +78,7 @@ impl CPU {
                     let d16 = mmu.get_next_word();
                     mmu.set_bc(d16);
                 }
+                0x02 => mmu.wb(bc, a),
                 0x03 => mmu.set_bc(bc.wrapping_add(1)),
                 0x04 => mmu.b = alu::inc(mmu, b),
                 0x05 => mmu.b = alu::dec(mmu, b),
@@ -85,6 +86,10 @@ impl CPU {
                 0x07 => {
                     mmu.a = alu::rlc(mmu, a); // RLCA is almost the same as RLC but Z is always 0.
                     mmu.set_flag_z(false);
+                }
+                0x08 => {
+                    let address = mmu.get_next_word();
+                    mmu.ww(address, sp);
                 }
                 0x09 => alu::add_hl_16(mmu, bc),
                 0x0A => mmu.a = mmu.rb(bc),
@@ -205,15 +210,30 @@ impl CPU {
                 0x3C => mmu.a = alu::inc(mmu, a),
                 0x3D => mmu.a = alu::dec(mmu, a),
                 0x3E => mmu.a = mmu.get_next_byte(),
-                0x40 => (), // LD B, B == NOP.
-                0x4E => mmu.c = mmu.rb(hl),
+                0x3F => {
+                    mmu.set_flag_n(false);
+                    mmu.set_flag_h(false);
+                    mmu.set_flag_c(!mmu.flag_c());
+                }
+                0x40 => mmu.b = b,
+                0x41 => mmu.b = c,
+                0x42 => mmu.b = d,
+                0x43 => mmu.b = e,
+                0x44 => mmu.b = h,
+                0x45 => mmu.b = l,
                 0x46 => mmu.b = mmu.rb(hl),
                 0x47 => mmu.b = a,
-                0x49 => (), // LD C, C == NOP.
+                0x48 => mmu.c = b,
+                0x49 => mmu.c = c,
+                0x4A => mmu.c = d,
+                0x4B => mmu.c = e,
+                0x4C => mmu.c = h,
+                0x4D => mmu.c = l,
+                0x4E => mmu.c = mmu.rb(hl),
                 0x4F => mmu.c = a,
                 0x50 => mmu.d = b,
                 0x51 => mmu.d = c,
-                0x52 => (), // LD D, D == NOP.
+                0x52 => mmu.d = d,
                 0x53 => mmu.d = e,
                 0x54 => mmu.d = h,
                 0x55 => mmu.d = l,
@@ -414,6 +434,10 @@ impl CPU {
                     mmu.pc = mmu.pop_stack();
                     mmu.interrupts.enable_ime(1); // RETI re-enables IME after this opcode.
                 }
+                0xDE => {
+                    let value = mmu.get_next_byte();
+                    alu::sbc(mmu, value);
+                }
                 0xE0 => {
                     let addr = mmu.get_next_byte();
                     mmu.wb(0xFF00 + addr as u16, a);
@@ -446,8 +470,8 @@ impl CPU {
                     mmu.a = mmu.rb(addr);
                 }
                 0xF1 => {
-                    let addr = mmu.pop_stack();
-                    mmu.set_af(addr); // set_af will clear lowest 4 bits of F to 0.
+                    let addr = mmu.pop_stack() & 0xFFF0; // Lowest 4 bits not used.
+                    mmu.set_af(addr);
                 }
                 0xF2 => {
                     let address = 0xFF00 + c as u16;

@@ -312,7 +312,6 @@ pub fn daa(mmu: &mut MMU) {
 
     mmu.set_flag_z(mmu.a == 0);
     mmu.set_flag_h(false);
-    // mmu.set_flag_c(tru);
 }
 
 #[cfg(test)]
