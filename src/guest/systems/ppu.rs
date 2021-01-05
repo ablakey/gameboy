@@ -66,6 +66,7 @@ pub struct PPU {
     modeclock: usize, // Current clock step representing where the PPU is in its processing cycle.
     pub bg_color_zero: [bool; 160], // tracks which pixels in a row have background = 0.
     pub image_buffer: [u8; 160 * 144],
+    window_line_draw_count: u8, // See page 23 of GB Manual (window interrupt internal state)
 }
 
 impl PPU {
@@ -74,6 +75,7 @@ impl PPU {
             modeclock: 0,
             bg_color_zero: [false; 160],
             image_buffer: [0; 160 * 144],
+            window_line_draw_count: 0,
         }
     }
 
@@ -109,6 +111,9 @@ impl PPU {
             // VBlank line.
             if mmu.ppu.line >= 144 && mode != 1 {
                 mmu.ppu.mode = 1;
+
+                // Reset window internal state counter.
+                self.window_line_draw_count = 0;
 
                 // LCDC Status interrupt entering mode 1?
                 if mmu.ppu.mode1_int_enable {
@@ -277,31 +282,44 @@ impl PPU {
     fn draw_window_scanline(&mut self, mmu: &MMU) {
         let ppu = &mmu.ppu;
 
-        if !ppu.window_on {
+        if !ppu.window_on || ppu.line < ppu.win_y {
             return;
         }
 
-        // The y coord of the top-left of this current line of the window.
-        let win_y = ppu.line as isize - ppu.win_y as isize;
+        // // The y coord of the top-left of this current line of the window.
+        // let win_y = self.window_line_draw_count;
 
-        // Current line is not
-        if win_y < 0 {
-            return;
-        }
+        // if win_y < 0 {
+        //     return;
+        // }
 
         let tilemap_address = if ppu.window_tilemap { 0x9C00 } else { 0x9800 };
+
+        let mut drew_pixel = false;
 
         for x in 0..160u8 {
             let win_x = 0 - (ppu.win_x as isize - 7) + x as isize;
 
             // The window draws off the screen for this pixel.
             if win_x < 0 || win_x >= 160 {
+                // TODO: is 160 correct?
                 continue;
             }
 
-            let pixel = get_tile_pixel(mmu, win_x as u8, win_y as u8, tilemap_address);
+            println!("{}, {}", win_x, self.window_line_draw_count);
+            let pixel = get_tile_pixel(
+                mmu,
+                win_x as u8,
+                self.window_line_draw_count as u8,
+                tilemap_address,
+            );
 
             self.draw_pixel(ppu.line, x, pixel);
+            drew_pixel = true;
+        }
+
+        if drew_pixel {
+            self.window_line_draw_count += 1;
         }
     }
 
