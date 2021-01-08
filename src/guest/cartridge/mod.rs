@@ -30,7 +30,8 @@ impl Cartridge {
 
                 match &data[0x147] {
                     0x00 => Box::new(Mbc0::new(data)),
-                    0x01..=0x03 => Box::new(Mbc1::new(data)),
+                    0x01 => Box::new(Mbc1::new(data)),
+                    // 0x03 => Box::new(Mbc3::new(data)),
                     m => panic!("Tried to initialize non-supported MBC: {:x}", m),
                 }
             }

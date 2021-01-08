@@ -177,7 +177,7 @@ impl PPU {
             return;
         };
 
-        let mut sprites_to_draw: Vec<(u8, u8, u8)> = Vec::new();
+        let mut sprites_to_draw: Vec<(isize, isize, u8)> = Vec::new();
 
         // Walk through 40 sprites in OAM memory and collect the first 10 that draw on this line.
         // Note that we hold on to x_pos and idx because they're needed for sorting and access.
@@ -197,7 +197,7 @@ impl PPU {
                 continue;
             }
 
-            sprites_to_draw.push((x_pos as u8, y_pos as u8, idx as u8));
+            sprites_to_draw.push((x_pos as isize, y_pos as isize, idx as u8));
         }
 
         // Now that we have 10, sort them by priority:
@@ -249,7 +249,7 @@ impl PPU {
             let sprite_data_upper = mmu.rb(sprite_data_address + 1);
 
             // Walk through each pixel to be drawn.
-            for p in 0..8u8 {
+            for p in 0..8isize {
                 // Is this specific pixel not on the screen? We already check that x_pos is not off
                 // the left side earlier, so only need to check that it's not off the right side.
                 if x_pos + p >= 160 {

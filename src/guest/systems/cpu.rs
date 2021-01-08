@@ -549,8 +549,17 @@ impl CPU {
                     let value = alu::rr(mmu, mmu.rb(hl));
                     mmu.wb(hl, value);
                 }
-
                 0x1F => mmu.a = alu::rr(mmu, a),
+                0x20 => mmu.b = alu::sla(mmu, b),
+                0x21 => mmu.c = alu::sla(mmu, c),
+                0x22 => mmu.d = alu::sla(mmu, d),
+                0x23 => mmu.e = alu::sla(mmu, e),
+                0x24 => mmu.h = alu::sla(mmu, h),
+                0x25 => mmu.h = alu::sla(mmu, l),
+                0x26 => {
+                    let value = alu::sla(mmu, mmu.rb(hl));
+                    mmu.wb(hl, value);
+                }
                 0x27 => mmu.a = alu::sla(mmu, a),
                 0x2F => mmu.a = alu::sra(mmu, a),
                 0x30 => mmu.b = alu::swap(mmu, b),

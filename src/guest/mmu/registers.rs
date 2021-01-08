@@ -38,10 +38,18 @@ impl MMU {
     create_flag!(flag_c, set_flag_c, 4);
 
     // AF needs custom get/set logic because the lowest 4 bits of F are always 0.
-    create_register_pair!(af, set_af, a, f);
+    create_register_pair!(_af, _set_af, a, f);
     create_register_pair!(bc, set_bc, b, c);
     create_register_pair!(de, set_de, d, e);
     create_register_pair!(hl, set_hl, h, l);
+
+    pub fn af(&self) -> u16 {
+        self._af() & 0xFFF0
+    }
+
+    pub fn set_af(&mut self, value: u16) {
+        self._set_af(value & 0xFFF0);
+    }
 }
 
 #[cfg(test)]
