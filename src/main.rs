@@ -5,7 +5,6 @@ use emulator::Emulator;
 use std::env;
 
 fn main() {
-
     let args: Vec<String> = env::args().collect();
     let cartridge_path = if args.len() > 1 { Some(&args[1]) } else { None };
     let skip_boot_rom = args.contains(&String::from("--noboot"));
