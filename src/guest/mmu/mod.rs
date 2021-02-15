@@ -138,7 +138,8 @@ impl MMU {
             0xFE00..=0xFE9F => self.oam[(address - 0xFE00) as usize] = value,
             0xFEA0..=0xFEFF => (),
             0xFF00 => self.gamepad = value,
-            0xFF01 => println!("{}", value as char), // TODO: serial
+            0xFF01 => (),
+            // 0xFF01 => println!("{}", value as char), // TODO: serial
             0xFF02 => (),                            // TODO: serial control.
             0xFF04..=0xFF07 => self.timer.wb(address, value),
             0xFF0F => self.interrupts.intf = value,
