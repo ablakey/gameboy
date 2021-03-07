@@ -1,6 +1,6 @@
 use crate::guest::systems::{Gamepad, Timer, CPU, PPU};
 use crate::guest::MMU;
-use crate::host::{Input, InputEvent, Screen};
+use crate::host::{Audio, Input, InputEvent, Screen};
 use sdl2;
 
 pub const CPU_FREQ: usize = 4194304; // 4MHz for DMG-01.
@@ -17,6 +17,7 @@ pub struct Emulator {
     // Host components.
     input: Input,
     screen: Screen,
+    audio: Audio,
 }
 
 impl Emulator {
@@ -25,6 +26,7 @@ impl Emulator {
         let sdl_context = sdl2::init()?;
         let input = Input::new(&sdl_context)?;
         let screen = Screen::new(&sdl_context, 4)?;
+        let audio = Audio::new(&sdl_context)?;
         Ok(Self {
             cpu: CPU::new(),
             mmu: MMU::new(cartridge_path, use_bootrom),
@@ -32,6 +34,7 @@ impl Emulator {
             timer: Timer::new(),
             gamepad: Gamepad::new(),
             input,
+            audio,
             screen,
         })
     }
@@ -86,5 +89,7 @@ impl Emulator {
         // main loop can block on awaiting that ping. There's probably also a really smart way
         // to handle it using async/await.
         self.screen.update(&self.ppu.image_buffer);
+
+        // self.audio.
     }
 }

@@ -140,7 +140,7 @@ impl MMU {
             0xFF00 => self.gamepad = value,
             0xFF01 => (),
             // 0xFF01 => println!("{}", value as char), // TODO: serial
-            0xFF02 => (),                            // TODO: serial control.
+            0xFF02 => (), // TODO: serial control.
             0xFF04..=0xFF07 => self.timer.wb(address, value),
             0xFF0F => self.interrupts.intf = value,
             0xFF10..=0xFF3F => self.apu.wb(address, value),
