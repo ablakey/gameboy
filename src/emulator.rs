@@ -1,4 +1,4 @@
-use crate::guest::systems::{Gamepad, Timer, CPU, PPU};
+use crate::guest::systems::{Gamepad, Timer, APU, CPU, PPU};
 use crate::guest::MMU;
 use crate::host::{Audio, Input, InputEvent, Screen};
 use sdl2;
@@ -12,6 +12,7 @@ pub struct Emulator {
     cpu: CPU,
     ppu: PPU,
     mmu: MMU,
+    apu: APU,
     gamepad: Gamepad,
     timer: Timer,
     // Host components.
@@ -27,10 +28,12 @@ impl Emulator {
         let input = Input::new(&sdl_context)?;
         let screen = Screen::new(&sdl_context, 4)?;
         let audio = Audio::new(&sdl_context)?;
+
         Ok(Self {
             cpu: CPU::new(),
             mmu: MMU::new(cartridge_path, use_bootrom),
             ppu: PPU::new(),
+            apu: APU::new(),
             timer: Timer::new(),
             gamepad: Gamepad::new(),
             input,
@@ -62,17 +65,13 @@ impl Emulator {
         self.gamepad.update_state(gamepad_state);
 
         'frame: loop {
-            // Gamepad step.
+            // Advance each emulator system one opcode (step).
+            // The length of the step depends on what opcode is executed.
             self.gamepad.step(mmu);
-
-            // CPU step.
             let cycles = self.cpu.step(mmu);
-
-            // Timer step.
             self.timer.step(mmu, cycles);
-
-            // PPU step.
             self.ppu.step(mmu, cycles);
+            self.apu.step(mmu, cycles);
 
             // 4Mhz cpu at 60fps.
             cycle_count += cycles as usize;
@@ -89,6 +88,18 @@ impl Emulator {
         // main loop can block on awaiting that ping. There's probably also a really smart way
         // to handle it using async/await.
         self.screen.update(&self.ppu.image_buffer);
+
+        // TODO: update audio state.
+        // if there's audio to pop off the internal queue do that and put it on the audio queue.
+        // This means there's another mpsc. And we just drain that mpsc as fast as we can here.
+        // self.audio.enqueue(something_from_the_ppu)
+
+        // 1. take entire contents of the buffer
+        // 2. enqueue it.
+        // 3. clear buffer.
+
+        // This here is only called at 60fps.  So we'll have 16.6ms worth of audio that queues
+        // up.
 
         // self.audio.
     }

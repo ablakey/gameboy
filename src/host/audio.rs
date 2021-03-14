@@ -3,24 +3,36 @@ use sdl2::{
     audio::{AudioCallback, AudioSpecDesired},
 };
 use std::sync::mpsc::{sync_channel, Receiver, SyncSender};
+use std::time::Duration;
 
 const BUFFER_SIZE: usize = 4;
 
 // TODO: explain that this was borrowed from
 // https://github.com/min050820/rust-gb/blob/master/src/gameboy/sound.rs#L137
 struct Callback {
-    receiver: Receiver<[f32; 2]>,
+    receiver: Receiver<[[f32; 2]; 256]>,
 }
 
 impl AudioCallback for Callback {
     type Channel = f32;
     fn callback(&mut self, buf: &mut [f32]) {
-        // TOOD: exhaust receiver and feed it into buf.
+        // Drain the next 256 samples.
+        match self.receiver.recv_timeout(Duration::from_millis(30)) {
+            Ok(n) => {
+                for i in 0..n.len() {
+                    buf[i * 2] = n[i][0]; // Left Channel
+                    buf[i * 2 + 1] = n[i][1]; // Right Channel
+                }
+            }
+            Err(_) => {
+                // TODO: set buffer to zeros?
+            }
+        }
     }
 }
 
 pub struct Audio {
-    sender: SyncSender<[f32; 2]>,
+    sender: SyncSender<[[f32; 2]; 256]>,
 }
 
 impl Audio {
@@ -44,7 +56,7 @@ impl Audio {
         Ok(Self { sender })
     }
 
-    pub fn enqueue(&self) {
-        self.sender.send([0f32, 0f32]);
+    pub fn enqueue(&self, samples: [[f32; 2]; 256]) {
+        self.sender.send(samples);
     }
 }

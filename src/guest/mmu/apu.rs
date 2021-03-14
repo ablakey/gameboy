@@ -95,6 +95,11 @@ impl ApuRegisters {
         }
     }
 
+    pub fn rb(&self, address: u16) -> u8 {
+        0
+        // TODO: Implement.
+    }
+
     // pub fn rb(&self, address: u16) -> u8 {
     //     match address {
     //         0xFF14 => self.nr14, // TODO: not correct. Only bit 6 can be read?
