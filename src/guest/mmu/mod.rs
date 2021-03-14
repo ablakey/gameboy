@@ -19,7 +19,7 @@ pub struct MMU {
     vram: [u8; 0x2000], // 8KB graphics RAM.
     bootloader: BootLoader,
     pub ppu: PpuRegisters,
-    apu: ApuRegisters,
+    pub apu: ApuRegisters,
     pub timer: TimerRegisters,
 
     cartridge: Cartridge, // Cartridge contains the MBC logic.

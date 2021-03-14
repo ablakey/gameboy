@@ -1,9 +1,12 @@
+use std::convert::TryInto;
+
 use crate::guest::systems::{Gamepad, Timer, APU, CPU, PPU};
 use crate::guest::MMU;
 use crate::host::{Audio, Input, InputEvent, Screen};
 use sdl2;
 
 pub const CPU_FREQ: usize = 4194304; // 4MHz for DMG-01.
+pub const AUDIO_FREQ: usize = 44_100; // 44KHz audio sample target.
 pub const DIVIDER_FREQ: usize = CPU_FREQ / 16384; // Divider always runs at 16KHz.
 const FRAMERATE: usize = 60;
 
@@ -89,18 +92,12 @@ impl Emulator {
         // to handle it using async/await.
         self.screen.update(&self.ppu.image_buffer);
 
-        // TODO: update audio state.
-        // if there's audio to pop off the internal queue do that and put it on the audio queue.
-        // This means there's another mpsc. And we just drain that mpsc as fast as we can here.
-        // self.audio.enqueue(something_from_the_ppu)
-
-        // 1. take entire contents of the buffer
-        // 2. enqueue it.
-        // 3. clear buffer.
-
-        // This here is only called at 60fps.  So we'll have 16.6ms worth of audio that queues
-        // up.
-
-        // self.audio.
+        // Drain the entire contents of the emulator's audio sample buffer into the host's buffer.
+        // Recall: the host accepts a vector of any size, but it feeds that vector into an MPSC
+        // that will block when full.  The audio device will drain this buffer in a separate thread.
+        if self.apu.output_buffer.len() > 256 {
+            self.audio
+                .enqueue(self.apu.output_buffer[0..256].try_into().unwrap())
+        }
     }
 }
