@@ -5,7 +5,7 @@ const CYCLES_PER_SAMPLE: usize = CPU_FREQ / AUDIO_FREQ;
 
 pub struct APU {
     clock: usize,
-    pub output_buffer: Vec<[f32; 2]>,
+    pub output_buffer: Vec<f32>,
     counter: usize,
 }
 
@@ -30,11 +30,11 @@ impl APU {
             // TODO: this is a random test sample. Probably makes awful noise.
             // let right = rng.gen::<f64>();
 
-            if self.counter > AUDIO_FREQ / 256 {
-                self.output_buffer.push([0.25, 0.25]);
+            if self.counter > AUDIO_FREQ / 100 {
+                self.output_buffer.push(0.25);
                 self.counter = 0;
             } else {
-                self.output_buffer.push([-0.25, -0.25]);
+                self.output_buffer.push(-0.25);
             }
 
             // Consume a sample's worth off the clock.

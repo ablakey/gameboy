@@ -7,7 +7,7 @@ use sdl2;
 
 pub const CPU_FREQ: usize = 4194304; // 4MHz for DMG-01.
 pub const AUDIO_FREQ: usize = 44_100; // 44KHz audio sample target.
-pub const AUDIO_BUFFER: usize = AUDIO_FREQ / 30;
+pub const AUDIO_BUFFER: usize = AUDIO_FREQ / 60;
 pub const DIVIDER_FREQ: usize = CPU_FREQ / 16384; // Divider always runs at 16KHz.
 const FRAMERATE: usize = 60;
 

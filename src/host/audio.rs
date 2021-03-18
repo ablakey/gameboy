@@ -1,9 +1,8 @@
 use sdl2::{
     self,
-    audio::{AudioCallback, AudioDevice, AudioSpecDesired},
+    audio::{AudioCallback, AudioQueue, AudioSpecDesired},
 };
 use std::sync::mpsc::{channel, Receiver, Sender};
-use std::time::Duration;
 
 use crate::emulator::{AUDIO_BUFFER, AUDIO_FREQ};
 
@@ -33,7 +32,7 @@ impl AudioCallback for Callback {
 
 pub struct Audio {
     sender: Sender<[[f32; 2]; AUDIO_BUFFER]>,
-    _player: AudioDevice<Callback>, // Not referenced but must be held or is dropped.
+    _player: AudioQueue<f32>, // Not referenced but must be held or is dropped.
 }
 
 impl Audio {
@@ -47,7 +46,8 @@ impl Audio {
             samples: None, // Default.
         };
 
-        let player = audio.open_playback(None, &spec, |spec| Callback { receiver })?;
+        // let player = audio.open_playback(None, &spec, |spec| Callback { receiver })?;
+        let player = audio.open_queue::<f32, _>(None, &spec)?;
 
         player.resume();
 
@@ -57,7 +57,26 @@ impl Audio {
         })
     }
 
-    pub fn enqueue(&self, samples: [[f32; 2]; AUDIO_BUFFER]) {
-        self.sender.send(samples).unwrap();
+    pub fn enqueue(&self, samples: [f32; AUDIO_BUFFER]) {
+        // self._player.queue(&samples);
+        self._player.queue(&gen_wave(44_100));
+        // self.sender.send(samples).unwrap();
     }
+}
+
+fn gen_wave(bytes_to_write: i32) -> Vec<f32> {
+    // Generate a square wave
+    let tone_volume = 1_000f32;
+    let period = 220;
+    let sample_count = bytes_to_write;
+    let mut result = Vec::new();
+
+    for x in 0..sample_count {
+        result.push(if (x / period) % 2 == 0 {
+            tone_volume
+        } else {
+            -tone_volume
+        });
+    }
+    result
 }
