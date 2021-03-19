@@ -7,7 +7,7 @@ use sdl2;
 
 pub const CPU_FREQ: usize = 4194304; // 4MHz for DMG-01.
 pub const AUDIO_FREQ: usize = 48_000; // 48KHz audio sample target.
-pub const AUDIO_BUFFER: usize = 4096;
+pub const AUDIO_BUFFER: usize = (AUDIO_FREQ / 60) * 2; // Two frames worth of audio buffer.
 pub const DIVIDER_FREQ: usize = CPU_FREQ / 16384; // Divider always runs at 16KHz.
 const FRAMERATE: usize = 60;
 
@@ -97,8 +97,9 @@ impl Emulator {
         // Recall: the host accepts a vector of any size, but it feeds that vector into an MPSC
         // that will block when full.  The audio device will drain this buffer in a separate thread.
         if self.apu.output_buffer.len() >= AUDIO_BUFFER {
-            self.audio
-                .enqueue(self.apu.output_buffer[0..AUDIO_BUFFER].try_into().unwrap())
+            println!("{}", self.apu.output_buffer.len());
+            let x: Vec<[f32; 2]> = self.apu.output_buffer.drain(0..AUDIO_BUFFER).collect();
+            self.audio.enqueue(x.try_into().unwrap());
         }
     }
 }

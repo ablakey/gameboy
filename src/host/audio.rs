@@ -2,7 +2,7 @@ use sdl2::{
     self,
     audio::{AudioCallback, AudioDevice, AudioSpecDesired},
 };
-use std::sync::mpsc::{sync_channel, Receiver, SyncSender};
+use std::sync::mpsc::{channel, Receiver, Sender};
 use std::time::Duration;
 
 use crate::emulator::{AUDIO_BUFFER, AUDIO_FREQ};
@@ -16,9 +16,8 @@ struct Callback {
 impl AudioCallback for Callback {
     type Channel = f32;
     fn callback(&mut self, buf: &mut [f32]) {
-        match self.receiver.recv_timeout(Duration::from_millis(30)) {
+        match self.receiver.recv_timeout(Duration::from_millis(1)) {
             Ok(n) => {
-                println!("{} {}", buf.len(), n.len());
                 for i in 0..n.len() {
                     buf[i * 2] = n[i][0]; // Left Channel
                     buf[i * 2 + 1] = n[i][1]; // Right Channel
@@ -33,13 +32,13 @@ impl AudioCallback for Callback {
 }
 
 pub struct Audio {
-    sender: SyncSender<[[f32; 2]; AUDIO_BUFFER]>,
+    sender: Sender<[[f32; 2]; AUDIO_BUFFER]>,
     _player: AudioDevice<Callback>, // Not referenced but must be held or is dropped.
 }
 
 impl Audio {
     pub fn new(context: &sdl2::Sdl) -> Result<Self, String> {
-        let (sender, receiver) = sync_channel(4);
+        let (sender, receiver) = channel();
 
         let audio = context.audio()?;
         let spec = AudioSpecDesired {

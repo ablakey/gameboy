@@ -1,11 +1,13 @@
+use std::collections::VecDeque;
+
 use super::MMU;
 use crate::emulator::{AUDIO_FREQ, CPU_FREQ};
 
-const CYCLES_PER_SAMPLE: usize = CPU_FREQ / AUDIO_FREQ;
+const CYCLES_PER_SAMPLE: usize = (CPU_FREQ / AUDIO_FREQ) + 1; // Round up. (ceil usage in const?)
 
 pub struct APU {
     clock: usize,
-    pub output_buffer: [[f32; 2]; 256],
+    pub output_buffer: VecDeque<[f32; 2]>,
     counter: usize,
 }
 
@@ -13,7 +15,7 @@ impl APU {
     pub fn new() -> Self {
         Self {
             clock: 0,
-            output_buffer: Vec::new(),
+            output_buffer: VecDeque::new(),
             counter: 0,
         }
     }
@@ -30,18 +32,16 @@ impl APU {
             // TODO: this is a random test sample. Probably makes awful noise.
             // let right = rng.gen::<f64>();
 
-            if self.counter > 220 {
+            if self.counter > 110 {
                 self.counter = 0;
-            } else if self.counter > 110 {
-                self.output_buffer.push([-0.25, -0.25]);
+            } else if self.counter > 55 {
+                self.output_buffer.push_back([-0.25, -0.25]);
             } else {
-                self.output_buffer.push([0.25, 0.25]);
+                self.output_buffer.push_back([0.25, 0.25]);
             }
 
             // Consume a sample's worth off the clock.
             self.clock -= CYCLES_PER_SAMPLE
         }
-
-        // When we have passed  4mhz / 44khz worth of cycles, do build samples.
     }
 }
