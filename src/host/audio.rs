@@ -17,6 +17,7 @@ impl AudioCallback for Callback {
     type Channel = f32;
     fn callback(&mut self, buf: &mut [f32]) {
         match self.receiver.recv_timeout(Duration::from_millis(1)) {
+            // match self.receiver.recv() {
             Ok(n) => {
                 for i in 0..n.len() {
                     buf[i * 2] = n[i][0]; // Left Channel
