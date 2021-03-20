@@ -10,6 +10,7 @@ edition = "2018"
 pretty-hex = "*"
 serde = { version = "*", features = ["derive"] }
 serde_json = "*"
+tokio = { version = "1", features = ["full"] }
 
 [dependencies.sdl2]
 version = "0.33.0"

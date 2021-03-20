@@ -1,13 +1,12 @@
-use std::convert::TryInto;
-
 use crate::guest::systems::{Gamepad, Timer, APU, CPU, PPU};
 use crate::guest::MMU;
 use crate::host::{Audio, Input, InputEvent, Screen};
 use sdl2;
-
+use std::{convert::TryInto, time::Duration};
+use tokio;
 pub const CPU_FREQ: usize = 4194304; // 4MHz for DMG-01.
 pub const AUDIO_FREQ: usize = 48_000; // 48KHz audio sample target.
-pub const AUDIO_BUFFER: usize = (AUDIO_FREQ / 60) * 2; // Two frames worth of audio buffer.
+pub const AUDIO_BUFFER: usize = 1024; // Needs to be a power of 2 and more than 1 frame of sound.
 pub const DIVIDER_FREQ: usize = CPU_FREQ / 16384; // Divider always runs at 16KHz.
 const FRAMERATE: usize = 60;
 
@@ -46,7 +45,7 @@ impl Emulator {
         })
     }
 
-    pub fn run_forever(&mut self) {
+    pub async fn run_forever(&mut self) {
         'program: loop {
             // Handle program I/O (events that affect the emulator). This needs to be
             match self.input.get_event() {
@@ -54,13 +53,13 @@ impl Emulator {
                 InputEvent::Panic => panic!("Panic caused by user."),
                 _ => (),
             }
-            self.emulate_frame();
+            self.emulate_frame().await;
         }
     }
 
     /// Emulate one whole frame work of CPU, PPU, Timer work. Given 60fps, 1 frame is 1/60 of the
     /// CPU clock speed worth of work:
-    fn emulate_frame(&mut self) {
+    async fn emulate_frame(&mut self) {
         let mmu = &mut self.mmu;
         let mut cycle_count: usize = 0;
 
@@ -84,6 +83,23 @@ impl Emulator {
             }
         }
 
+        // Drain the entire contents of the emulator's audio sample buffer into the host's buffer.
+        // Recall: the host accepts a vector of any size, but it feeds that vector into an MPSC
+        // that will block when full.  The audio device will drain this buffer in a separate thread.
+        if self.apu.output_buffer.len() >= AUDIO_BUFFER {
+            let x: Vec<[f32; 2]> = self.apu.output_buffer.drain(0..AUDIO_BUFFER).collect();
+            self.audio.enqueue(x.try_into().unwrap());
+        }
+
+        // Prevent CPU blocking unnecessary time in screen.update (SDL2 vsync blocks).
+        // This is kind of bad because it assumes things about hardware performance and how long
+        // the above functions and screen.update take.
+        // Ideally, this value is "16.67ms - emulation_time - audio_time - screen_time."
+        // That way we give screen.update just enough time to update and it does very little
+        // vsync blocking.  There might be a way to implement that by tracking how long past frames
+        // took.
+        tokio::time::sleep(Duration::from_millis(5)).await;
+
         // Draw the frame.  Note that vsync is enabled so this is ultimately what governs the
         // rate of this emulator. The SDL drawing routine will block for the next frame. This also
         // means that if the framerate goverened by v-sync isn't 60fps, this emulator won't work
@@ -92,14 +108,5 @@ impl Emulator {
         // main loop can block on awaiting that ping. There's probably also a really smart way
         // to handle it using async/await.
         self.screen.update(&self.ppu.image_buffer);
-
-        // Drain the entire contents of the emulator's audio sample buffer into the host's buffer.
-        // Recall: the host accepts a vector of any size, but it feeds that vector into an MPSC
-        // that will block when full.  The audio device will drain this buffer in a separate thread.
-        if self.apu.output_buffer.len() >= AUDIO_BUFFER {
-            println!("{}", self.apu.output_buffer.len());
-            let x: Vec<[f32; 2]> = self.apu.output_buffer.drain(0..AUDIO_BUFFER).collect();
-            self.audio.enqueue(x.try_into().unwrap());
-        }
     }
 }

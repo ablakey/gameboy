@@ -1,22 +1,30 @@
 use std::collections::VecDeque;
-
+mod square;
+mod wave;
 use super::MMU;
 use crate::emulator::{AUDIO_FREQ, CPU_FREQ};
+use square::SquareVoice;
+use wave::WaveVoice;
 
-const CYCLES_PER_SAMPLE: usize = (CPU_FREQ / AUDIO_FREQ) + 1; // Round up. (ceil usage in const?)
+// Making this a slight bit lower means we issue samples slightly more often.
+// This should result in the audio buffer very slowly falling out of sync as it grows.
+// But if we don't do this, there's gaps in audio, even if we queue up a bunch of quiet ahead of time.
+const CYCLES_PER_SAMPLE: usize = (CPU_FREQ / AUDIO_FREQ) - 1;
 
 pub struct APU {
     clock: usize,
+    square_1: SquareVoice,
+    wave: WaveVoice,
     pub output_buffer: VecDeque<[f32; 2]>,
-    counter: usize,
 }
 
 impl APU {
     pub fn new() -> Self {
         Self {
+            square_1: SquareVoice::new(),
+            wave: WaveVoice::new(),
             clock: 0,
             output_buffer: VecDeque::new(),
-            counter: 0,
         }
     }
 
@@ -28,17 +36,8 @@ impl APU {
 
         // If 1 audio sample worth of cycles has passed, let's build a sample.
         if self.clock >= CYCLES_PER_SAMPLE {
-            self.counter += 1 as usize;
-            // TODO: this is a random test sample. Probably makes awful noise.
-            // let right = rng.gen::<f64>();
-
-            if self.counter > 110 {
-                self.counter = 0;
-            } else if self.counter > 55 {
-                self.output_buffer.push_back([-0.25, -0.25]);
-            } else {
-                self.output_buffer.push_back([0.25, 0.25]);
-            }
+            // let sample_1 = self.tone.tick()
+            let wave_sample = self.wave.build_sample(mmu, cycles);
 
             // Consume a sample's worth off the clock.
             self.clock -= CYCLES_PER_SAMPLE
