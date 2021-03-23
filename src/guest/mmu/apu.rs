@@ -20,9 +20,9 @@ pub struct ApuRegisters {
     wave_on: bool,
     wave_length: u8,
     wave_length_enabled: bool,
-    wave_output: u8, // 00: mute, 01: as-is, 10: shift right, 11: shift right twice.
-    wave_frequency: u16, // Two 8-bit registers acting as a frequency value.
-    wave_ram: [u8; 32], // 32 4-bit wave pattern samples.
+    pub wave_output: u8, // 00: mute, 01: as-is, 10: shift right, 11: shift right twice.
+    pub wave_frequency: u16, // Two 8-bit registers acting as a frequency value.
+    pub wave_ram: [u8; 32], // 32 4-bit wave pattern samples.
     wave_initialize: bool, // When set high, the sound restarts, then flag is set low.
 
     // Noise
@@ -82,7 +82,7 @@ impl ApuRegisters {
             0xFF19 => self.nr24 = value,
             0xFF1A => self.wave_on = is_bit_set(value, 7),
             0xFF1B => self.wave_length = value,
-            0xFF1C => self.wave_output = value,
+            0xFF1C => self.wave_output = (value >> 5) & 0x3, // Only bits 5 and 6 matter.
             0xFF1D => self.wave_frequency = (self.wave_frequency & 0xFF00) | (value & 0xFF) as u16,
             0xFF1E => {
                 // Get the lowest 3 bits from value, shift to bits 9,10,11.

@@ -2,12 +2,25 @@ use crate::guest::systems::{Gamepad, Timer, APU, CPU, PPU};
 use crate::guest::MMU;
 use crate::host::{Audio, Input, InputEvent, Screen};
 use sdl2;
-use std::{convert::TryInto, time::Duration};
+use std::time::Duration;
 use tokio;
+
 pub const CPU_FREQ: usize = 4194304; // 4MHz for DMG-01.
 pub const AUDIO_FREQ: usize = 48_000; // 48KHz audio sample target.
 pub const AUDIO_BUFFER: usize = 1024; // Needs to be a power of 2 and more than 1 frame of sound.
 pub const DIVIDER_FREQ: usize = CPU_FREQ / 16384; // Divider always runs at 16KHz.
+
+// Emulate audio a fraction as often as the actual frequency.
+// If a single CPU instruction occurs, it is a minimum of 4 CPU clock cycles. We could emulate 4 APU
+// steps, but that provides such a crazy high number of sound samples that we don't need. We'll run
+// each voice's ticks a fraction as often, but still count all cycles (ie. a single tick is treated
+// APU_DIVISOR number of cycles)
+pub const APU_DIVISOR: usize = 4;
+
+// APU generates samples at some frequency that's far higher than the audio device.
+// This is how many APU samples should be used to generate a single audio device sample.
+const APU_SAMPLES_PER_AUDIO_SAMPLE: usize = (CPU_FREQ / APU_DIVISOR) / AUDIO_FREQ;
+
 const FRAMERATE: usize = 60;
 
 pub struct Emulator {
@@ -86,10 +99,20 @@ impl Emulator {
         // Drain the entire contents of the emulator's audio sample buffer into the host's buffer.
         // Recall: the host accepts a vector of any size, but it feeds that vector into an MPSC
         // that will block when full.  The audio device will drain this buffer in a separate thread.
-        if self.apu.output_buffer.len() >= AUDIO_BUFFER {
-            let x: Vec<[f32; 2]> = self.apu.output_buffer.drain(0..AUDIO_BUFFER).collect();
-            self.audio.enqueue(x.try_into().unwrap());
+        while self.apu.output_buffer.len() >= APU_SAMPLES_PER_AUDIO_SAMPLE {
+            let x: Vec<[f32; 2]> = self
+                .apu
+                .output_buffer
+                .drain(0..APU_SAMPLES_PER_AUDIO_SAMPLE)
+                .collect();
+            let y: f32 = x.iter().map(|n| n[0]).sum::<f32>() / x.len() as f32;
+            self.audio.enqueue([y, y]);
+            // TODO: doing a lot of probably inefficient work here, and cutting out audio channel.
+
+            // println!("{:?}", self.apu.output_buffer);
         }
+
+        println!("{}", self.apu.output_buffer.len());
 
         // Prevent CPU blocking unnecessary time in screen.update (SDL2 vsync blocks).
         // This is kind of bad because it assumes things about hardware performance and how long
