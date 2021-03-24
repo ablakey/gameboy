@@ -19,7 +19,7 @@ pub const APU_DIVISOR: usize = 4;
 
 // APU generates samples at some frequency that's far higher than the audio device.
 // This is how many APU samples should be used to generate a single audio device sample.
-const APU_SAMPLES_PER_AUDIO_SAMPLE: usize = (CPU_FREQ / APU_DIVISOR) / AUDIO_FREQ;
+const APU_SAMPLES_PER_AUDIO_SAMPLE: f64 = (CPU_FREQ / APU_DIVISOR) as f64 / AUDIO_FREQ as f64;
 
 const FRAMERATE: usize = 60;
 
@@ -96,23 +96,31 @@ impl Emulator {
             }
         }
 
+        let mut remainder: f64 = 0.0;
+
         // Drain the entire contents of the emulator's audio sample buffer into the host's buffer.
         // Recall: the host accepts a vector of any size, but it feeds that vector into an MPSC
         // that will block when full.  The audio device will drain this buffer in a separate thread.
-        while self.apu.output_buffer.len() >= APU_SAMPLES_PER_AUDIO_SAMPLE {
+        while self.apu.output_buffer.len() >= APU_SAMPLES_PER_AUDIO_SAMPLE.floor() as usize {
+            remainder += APU_SAMPLES_PER_AUDIO_SAMPLE.fract();
+
             let x: Vec<[f32; 2]> = self
                 .apu
                 .output_buffer
-                .drain(0..APU_SAMPLES_PER_AUDIO_SAMPLE)
+                .drain(0..APU_SAMPLES_PER_AUDIO_SAMPLE.floor() as usize)
                 .collect();
             let y: f32 = x.iter().map(|n| n[0]).sum::<f32>() / x.len() as f32;
-            self.audio.enqueue([y, y]);
+            self.audio.enqueue([y / 4.0, y / 4.0]);
             // TODO: doing a lot of probably inefficient work here, and cutting out audio channel.
 
-            // println!("{:?}", self.apu.output_buffer);
+            // The number of samples that makes up 1 APU sample isn't necessarily evenly divisible.
+            // We need to shave off some output_buffer samples or else the audio will forever fall
+            // further behind.
+            if remainder >= 1.0 {
+                self.apu.output_buffer.pop_front();
+                remainder -= 1.0;
+            }
         }
-
-        println!("{}", self.apu.output_buffer.len());
 
         // Prevent CPU blocking unnecessary time in screen.update (SDL2 vsync blocks).
         // This is kind of bad because it assumes things about hardware performance and how long
