@@ -2,12 +2,10 @@ use crate::guest::systems::{Gamepad, Timer, APU, CPU, PPU};
 use crate::guest::MMU;
 use crate::host::{Audio, Input, InputEvent, Screen};
 use sdl2;
-use std::time::Duration;
-use tokio;
 
 pub const CPU_FREQ: usize = 4194304; // 4MHz for DMG-01.
 pub const AUDIO_FREQ: usize = 48_000; // 48KHz audio sample target.
-pub const AUDIO_BUFFER: usize = 1024; // Needs to be a power of 2 and more than 1 frame of sound.
+pub const AUDIO_BUFFER: usize = 256; // Needs to be a power of 2.
 pub const DIVIDER_FREQ: usize = CPU_FREQ / 16384; // Divider always runs at 16KHz.
 
 // Emulate audio a fraction as often as the actual frequency.
@@ -58,7 +56,7 @@ impl Emulator {
         })
     }
 
-    pub async fn run_forever(&mut self) {
+    pub fn run_forever(&mut self) {
         'program: loop {
             // Handle program I/O (events that affect the emulator). This needs to be
             match self.input.get_event() {
@@ -66,13 +64,13 @@ impl Emulator {
                 InputEvent::Panic => panic!("Panic caused by user."),
                 _ => (),
             }
-            self.emulate_frame().await;
+            self.emulate_frame();
         }
     }
 
     /// Emulate one whole frame work of CPU, PPU, Timer work. Given 60fps, 1 frame is 1/60 of the
     /// CPU clock speed worth of work:
-    async fn emulate_frame(&mut self) {
+    fn emulate_frame(&mut self) {
         let mmu = &mut self.mmu;
         let mut cycle_count: usize = 0;
 
@@ -121,15 +119,6 @@ impl Emulator {
                 remainder -= 1.0;
             }
         }
-
-        // Prevent CPU blocking unnecessary time in screen.update (SDL2 vsync blocks).
-        // This is kind of bad because it assumes things about hardware performance and how long
-        // the above functions and screen.update take.
-        // Ideally, this value is "16.67ms - emulation_time - audio_time - screen_time."
-        // That way we give screen.update just enough time to update and it does very little
-        // vsync blocking.  There might be a way to implement that by tracking how long past frames
-        // took.
-        tokio::time::sleep(Duration::from_millis(5)).await;
 
         // Draw the frame.  Note that vsync is enabled so this is ultimately what governs the
         // rate of this emulator. The SDL drawing routine will block for the next frame. This also

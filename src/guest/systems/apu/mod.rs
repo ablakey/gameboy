@@ -12,7 +12,8 @@ const CYCLES_PER_FRAME: usize = CPU_FREQ / (512 * 8);
 
 pub struct APU {
     clock: usize,
-    square_1: SquareVoice,
+    square1: SquareVoice,
+    square2: SquareVoice,
     wave: WaveVoice,
     frame_sequence: usize,
     pub output_buffer: VecDeque<[f32; 2]>,
@@ -21,7 +22,8 @@ pub struct APU {
 impl APU {
     pub fn new() -> Self {
         Self {
-            square_1: SquareVoice::new(),
+            square1: SquareVoice::new(),
+            square2: SquareVoice::new(),
             wave: WaveVoice::new(),
             frame_sequence: 0,
             clock: 0,
@@ -42,7 +44,15 @@ impl APU {
 
             // Decrement length counters?
             if [0, 2, 4, 6].contains(&self.frame_sequence) {
-                // TODO
+
+                // TODO: this doesn't seem right.
+                // if mmu.apu.square1_length > 0 {
+                //     mmu.apu.square1_length -= 1;
+                // }
+
+                // if mmu.apu.square2_length > 0 {
+                //     mmu.apu.square2_length -= 1;
+                // }
             }
 
             // Decrement sweep?
@@ -63,12 +73,24 @@ impl APU {
         // values. This affects some voices more than others.
         for _ in 0..(cycles as usize / APU_DIVISOR) {
             let wave_sample = self.wave.tick(mmu);
+            let square1_sample = self.square1.tick(
+                mmu.apu.square1_length,
+                mmu.apu.square1_frequency,
+                mmu.apu.square1_wave_duty,
+            );
+
+            let square2_sample = self.square2.tick(
+                mmu.apu.square2_length,
+                mmu.apu.square2_frequency,
+                mmu.apu.square2_wave_duty,
+            );
+
+            let sample = (wave_sample + square1_sample + square2_sample) / 3.0;
 
             // TODO: combine samples
             // TODO: append samples to the output.
 
-            // print!("{}", wave_sample);
-            self.output_buffer.push_back([wave_sample, wave_sample]);
+            self.output_buffer.push_back([sample, sample]);
         }
 
         // // If 1 audio sample worth of cycles has passed, let's build a sample.

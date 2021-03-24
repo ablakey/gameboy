@@ -2,22 +2,26 @@ use super::is_bit_set;
 
 pub struct ApuRegisters {
     // Square (with sweep)
-    pub s1_sweep_time: u8,
-    pub s1_sweep_increase: bool,
-    pub s1_sweep_shift: u8,
-    nr11: u8, // 0xFF11: Sound mode 1 length/wave.
+    pub square1_sweep_time: u8,
+    pub square1_sweep_increase: bool, // If true, sweep frequency increases. False == decreases.
+    pub square1_sweep_shift: u8,
+    pub square1_wave_duty: u8,
+    pub square1_length: u8,
+    pub square1_frequency: u16,
+    pub square1_initialize: bool,
+    pub square1_consecutive: bool,
     nr12: u8, // 0xFF12: Sound mode 1 envelope.
-    nr13: u8, // 0xFF13: Sound mode 1 register, frequency Low.
-    nr14: u8, // 0xFF14: Sound mode 1 register, frequency High.
 
     // Square
-    nr21: u8, // 0xFF16: Sound mode 2 register, length, wave pattern duty.
+    pub square2_wave_duty: u8,
+    pub square2_length: u8,
+    pub square2_frequency: u16,
+    pub square2_initialize: bool,
+    pub square2_consecutive: bool,
     nr22: u8, // 0xFF17: Sound mode 2 register, envelope.
-    nr23: u8, // 0xFF18: Sound mode 2 register, frequency Low.
-    nr24: u8, // 0xFF19: Sound mode 2 register, frequency High.
 
     // Wave
-    wave_on: bool,
+    pub wave_on: bool,
     wave_length: u8,
     wave_length_enabled: bool,
     pub wave_output: u8, // 00: mute, 01: as-is, 10: shift right, 11: shift right twice.
@@ -38,17 +42,21 @@ pub struct ApuRegisters {
 impl ApuRegisters {
     pub fn new() -> Self {
         Self {
-            s1_sweep_time: 0,
-            s1_sweep_increase: false,
-            s1_sweep_shift: 0,
-            nr11: 0,
+            square1_sweep_time: 0,
+            square1_sweep_increase: false,
+            square1_sweep_shift: 0,
+            square1_wave_duty: 0,
+            square1_length: 0,
+            square1_frequency: 0,
+            square1_initialize: false,
+            square1_consecutive: false,
             nr12: 0,
-            nr13: 0,
-            nr14: 0,
-            nr21: 0,
+            square2_wave_duty: 0,
+            square2_length: 0,
+            square2_frequency: 0,
+            square2_initialize: false,
+            square2_consecutive: false,
             nr22: 0,
-            nr23: 0,
-            nr24: 0,
             wave_on: true,
             wave_length: 0,
             wave_length_enabled: false,
@@ -69,17 +77,40 @@ impl ApuRegisters {
     pub fn wb(&mut self, address: u16, value: u8) {
         match address {
             0xFF10 => {
-                self.s1_sweep_time = (value >> 4) & 0x7;
-                self.s1_sweep_increase = is_bit_set(value, 3)
+                self.square1_sweep_time = (value >> 4) & 0x7;
+                self.square1_sweep_shift = value & 0x7;
+                self.square1_sweep_increase = is_bit_set(value, 3)
             }
-            0xFF11 => self.nr11 = value,
+            0xFF11 => {
+                self.square1_wave_duty = value >> 6; // Highest 2 bits.
+                self.square1_length = value & 0x3F; // Lowest 6 bits.
+            }
             0xFF12 => self.nr12 = value,
-            0xFF13 => self.nr13 = value,
-            0xFF14 => self.nr14 = value,
-            0xFF16 => self.nr21 = value,
+            0xFF13 => {
+                self.square1_frequency = (self.square1_frequency & 0xFF00) | (value & 0xFF) as u16
+            }
+            0xFF14 => {
+                // Get the lowest 3 bits from value, shift to bits 9,10,11.
+                self.square1_frequency =
+                    (self.square1_frequency & 0xFF) | (((value & 0x07) as u16) << 8);
+                self.square1_initialize = is_bit_set(value, 7);
+                self.square1_consecutive = is_bit_set(value, 6);
+            }
+            0xFF16 => {
+                self.square2_wave_duty = value >> 6; // Highest 2 bits.
+                self.square2_length = value & 0x3F; // Lowest 6 bits.
+            }
             0xFF17 => self.nr22 = value,
-            0xFF18 => self.nr23 = value,
-            0xFF19 => self.nr24 = value,
+            0xFF18 => {
+                self.square2_frequency = (self.square2_frequency & 0xFF00) | (value & 0xFF) as u16
+            }
+            0xFF19 => {
+                // Get the lowest 3 bits from value, shift to bits 9,10,11.
+                self.square2_frequency =
+                    (self.square2_frequency & 0xFF) | (((value & 0x07) as u16) << 8);
+                self.square2_initialize = is_bit_set(value, 7);
+                self.square2_consecutive = is_bit_set(value, 6);
+            }
             0xFF1A => self.wave_on = is_bit_set(value, 7),
             0xFF1B => self.wave_length = value,
             0xFF1C => self.wave_output = (value >> 5) & 0x3, // Only bits 5 and 6 matter.

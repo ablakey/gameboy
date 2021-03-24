@@ -26,5 +26,12 @@ impl Audio {
 
     pub fn enqueue(&self, sample: [f32; 2]) {
         self.player.queue(&sample);
+
+        // TODO: A better approach to "catching up".
+        if self.player.size() > 20_000 {
+            self.player.clear();
+        }
+
+        println!("{}", self.player.size());
     }
 }

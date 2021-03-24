@@ -3,10 +3,8 @@ mod guest;
 mod host;
 use emulator::Emulator;
 use std::env;
-use tokio;
 
-#[tokio::main]
-pub async fn main() {
+pub fn main() {
     let args: Vec<String> = env::args().collect();
     let cartridge_path = if args.len() > 1 { Some(&args[1]) } else { None };
     let skip_boot_rom = args.contains(&String::from("--noboot"));
@@ -18,5 +16,5 @@ pub async fn main() {
     println!("{}", cartridge_path.unwrap());
 
     let mut emulator = Emulator::new(cartridge_path, !skip_boot_rom).unwrap();
-    emulator.run_forever().await;
+    emulator.run_forever();
 }
