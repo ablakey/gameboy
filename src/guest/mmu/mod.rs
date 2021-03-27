@@ -245,7 +245,7 @@ impl MMU {
 }
 
 /// Return boolean state of a bit in a byte. This is for convenience and not a concept of the DMG-01
-/// internals.
+/// internals.  position = 0..7
 pub fn is_bit_set(value: u8, position: u8) -> bool {
     (value & (1 << position)) != 0
 }

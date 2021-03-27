@@ -7,8 +7,8 @@ use square::SquareVoice;
 use wave::WaveVoice;
 
 // The number of CPU cycles (4MHz) per frame sequencer frame. Each frame is 64hz.
-// Frame sequencer runs at 512hz. There's 1024 CPU cycles per frame. 8 frames per second.
-const CYCLES_PER_FRAME: usize = CPU_FREQ / (512 * 8);
+// Frame sequencer runs at 512hz. There's 1024 CPU cycles per frame. 8 frames per cycle.
+const CYCLES_PER_FRAME: usize = (CPU_FREQ / 512 / 8) * 4;
 
 pub struct APU {
     clock: usize,
@@ -44,15 +44,14 @@ impl APU {
 
             // Decrement length counters?
             if [0, 2, 4, 6].contains(&self.frame_sequence) {
-
                 // TODO: this doesn't seem right.
                 // if mmu.apu.square1_length > 0 {
                 //     mmu.apu.square1_length -= 1;
                 // }
 
-                // if mmu.apu.square2_length > 0 {
-                //     mmu.apu.square2_length -= 1;
-                // }
+                if mmu.apu.square2_length > 0 && mmu.apu.square2_length_enabled {
+                    mmu.apu.square2_length -= 1;
+                }
             }
 
             // Decrement sweep?
@@ -61,9 +60,7 @@ impl APU {
             }
 
             // Decrement volume envelope?
-            if self.frame_sequence == 7 {
-                // TODO
-            }
+            if self.frame_sequence == 7 {}
         }
 
         // Run at 1MHz for performance reasons. This means that every tick is 4 cycles.
@@ -72,25 +69,26 @@ impl APU {
         // sample that's all one value, when in reality it would have been a mix between multiple
         // values. This affects some voices more than others.
         for _ in 0..(cycles as usize / APU_DIVISOR) {
-            let wave_sample = self.wave.tick(mmu);
-            let square1_sample = self.square1.tick(
-                mmu.apu.square1_length,
-                mmu.apu.square1_frequency,
-                mmu.apu.square1_wave_duty,
-            );
+            // let wave_sample = self.wave.tick(mmu);
+            // let square1_sample = self.square1.tick(
+            //     mmu.apu.square1_length,
+            //     mmu.apu.square1_frequency,
+            //     mmu.apu.square1_wave_duty,
+            // );
 
-            let square2_sample = self.square2.tick(
-                mmu.apu.square2_length,
-                mmu.apu.square2_frequency,
-                mmu.apu.square2_wave_duty,
-            );
+            // The above sequencer generates a step or not. WHen it does, pass the number Some(0..7)
+            // All other ticks,  pass None()
+            // This means the sequencer state machine needs to be advanced inside this loop.
 
-            let sample = (wave_sample + square1_sample + square2_sample) / 3.0;
+            let square2_sample = self.square2.tick(mmu, Some(sequencer_step));
+
+            // let sample = (wave_sample + square1_sample + square2_sample) / 3.0;
 
             // TODO: combine samples
             // TODO: append samples to the output.
 
-            self.output_buffer.push_back([sample, sample]);
+            self.output_buffer
+                .push_back([square2_sample, square2_sample]);
         }
 
         // // If 1 audio sample worth of cycles has passed, let's build a sample.

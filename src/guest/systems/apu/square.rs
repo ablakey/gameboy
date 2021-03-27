@@ -11,6 +11,7 @@ const DUTY_CYCLES: [[i32; 8]; 4] = [
 pub struct SquareVoice {
     clock: usize,      // Track where we are in playing the current phase of the duty_cycle.
     duty_phase: usize, // Track which of the 8 steps in the current duty cycle we're playing.
+    volume: usize,
 }
 
 impl SquareVoice {
@@ -18,10 +19,26 @@ impl SquareVoice {
         Self {
             clock: 0,
             duty_phase: 0,
+            volume: 0,
         }
     }
 
-    pub fn tick(&mut self, length: u8, frequency: u16, wave_duty: u8) -> f32 {
+    pub fn tick(
+        &mut self,
+        length: u8,
+        length_enabled: bool,
+        frequency: u16,
+        wave_duty: u8,
+        reset_clock: bool,
+        adjust_volume: usize,
+    ) -> f32 {
+        if reset_clock {
+            self.clock = 0;
+            self.duty_phase = 0;
+        }
+
+        self.volume = (self.volume + adjust_volume).clamp(0, 15);
+
         if length == 0 {
             return 0.0;
         }

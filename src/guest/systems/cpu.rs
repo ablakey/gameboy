@@ -194,6 +194,11 @@ impl CPU {
                     let d8 = mmu.get_next_byte();
                     mmu.wb(hl, d8);
                 }
+                0x37 => {
+                    mmu.set_flag_n(false);
+                    mmu.set_flag_h(false);
+                    mmu.set_flag_c(true);
+                }
                 0x38 => {
                     let r8 = mmu.get_signed_byte();
                     if mmu.flag_c() {
@@ -419,6 +424,13 @@ impl CPU {
                         condition_met = true;
                     }
                 }
+                0xD4 => {
+                    let address = mmu.get_next_word();
+                    if !mmu.flag_c() {
+                        mmu.push_stack(mmu.pc);
+                        mmu.pc = address;
+                    }
+                }
                 0xD5 => mmu.push_stack(de),
                 0xD6 => {
                     let value = mmu.get_next_byte();
@@ -433,6 +445,13 @@ impl CPU {
                 0xD9 => {
                     mmu.pc = mmu.pop_stack();
                     mmu.interrupts.enable_ime(1); // RETI re-enables IME after this opcode.
+                }
+                0xDA => {
+                    let address = mmu.get_next_word();
+                    if mmu.flag_c() {
+                        mmu.pc = address;
+                        condition_met = true;
+                    }
                 }
                 0xDE => {
                     let value = mmu.get_next_byte();
@@ -561,6 +580,16 @@ impl CPU {
                     mmu.wb(hl, value);
                 }
                 0x27 => mmu.a = alu::sla(mmu, a),
+                0x28 => mmu.b = alu::sra(mmu, b),
+                0x29 => mmu.c = alu::sra(mmu, c),
+                0x2A => mmu.d = alu::sra(mmu, d),
+                0x2B => mmu.e = alu::sra(mmu, e),
+                0x2C => mmu.h = alu::sra(mmu, h),
+                0x2D => mmu.l = alu::sra(mmu, l),
+                0x2E => {
+                    let value = alu::sra(mmu, mmu.rb(hl));
+                    mmu.wb(hl, value);
+                }
                 0x2F => mmu.a = alu::sra(mmu, a),
                 0x30 => mmu.b = alu::swap(mmu, b),
                 0x31 => mmu.c = alu::swap(mmu, c),
@@ -574,6 +603,15 @@ impl CPU {
                 }
                 0x37 => mmu.a = alu::swap(mmu, a),
                 0x38 => mmu.b = alu::srl(mmu, b),
+                0x39 => mmu.c = alu::srl(mmu, c),
+                0x3A => mmu.d = alu::srl(mmu, d),
+                0x3B => mmu.e = alu::srl(mmu, e),
+                0x3C => mmu.h = alu::srl(mmu, h),
+                0x3D => mmu.l = alu::srl(mmu, l),
+                0x3E => {
+                    let value = alu::srl(mmu, mmu.rb(hl));
+                    mmu.wb(hl, value);
+                }
                 0x3F => mmu.a = alu::srl(mmu, a),
                 0x40 => alu::bit(mmu, 0, b),
                 0x41 => alu::bit(mmu, 0, c),

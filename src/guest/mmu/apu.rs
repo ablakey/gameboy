@@ -9,7 +9,7 @@ pub struct ApuRegisters {
     pub square1_length: u8,
     pub square1_frequency: u16,
     pub square1_initialize: bool,
-    pub square1_consecutive: bool,
+    pub square1_length_enabled: bool,
     nr12: u8, // 0xFF12: Sound mode 1 envelope.
 
     // Square
@@ -17,7 +17,7 @@ pub struct ApuRegisters {
     pub square2_length: u8,
     pub square2_frequency: u16,
     pub square2_initialize: bool,
-    pub square2_consecutive: bool,
+    pub square2_length_enabled: bool,
     nr22: u8, // 0xFF17: Sound mode 2 register, envelope.
 
     // Wave
@@ -49,13 +49,13 @@ impl ApuRegisters {
             square1_length: 0,
             square1_frequency: 0,
             square1_initialize: false,
-            square1_consecutive: false,
+            square1_length_enabled: false,
             nr12: 0,
             square2_wave_duty: 0,
             square2_length: 0,
             square2_frequency: 0,
             square2_initialize: false,
-            square2_consecutive: false,
+            square2_length_enabled: false,
             nr22: 0,
             wave_on: true,
             wave_length: 0,
@@ -94,7 +94,7 @@ impl ApuRegisters {
                 self.square1_frequency =
                     (self.square1_frequency & 0xFF) | (((value & 0x07) as u16) << 8);
                 self.square1_initialize = is_bit_set(value, 7);
-                self.square1_consecutive = is_bit_set(value, 6);
+                self.square1_length_enabled = is_bit_set(value, 6);
             }
             0xFF16 => {
                 self.square2_wave_duty = value >> 6; // Highest 2 bits.
@@ -109,7 +109,7 @@ impl ApuRegisters {
                 self.square2_frequency =
                     (self.square2_frequency & 0xFF) | (((value & 0x07) as u16) << 8);
                 self.square2_initialize = is_bit_set(value, 7);
-                self.square2_consecutive = is_bit_set(value, 6);
+                self.square2_length_enabled = is_bit_set(value, 6);
             }
             0xFF1A => self.wave_on = is_bit_set(value, 7),
             0xFF1B => self.wave_length = value,
@@ -126,7 +126,10 @@ impl ApuRegisters {
             0xFF22 => self.nr43 = value,
             0xFF23 => self.nr44 = value,
             0xFF24 => self.nr50 = value,
-            0xFF25 => self.nr51 = value,
+            0xFF25 => {
+                self.nr51 = value;
+                println!("{}", value);
+            }
             0xFF26 => self.nr52 = value,
             0xFF30..=0xFF3F => {
                 // Incoming 8-bit value is two 4-bit samples. Split it and set it to wave_ram.
@@ -141,6 +144,7 @@ impl ApuRegisters {
     }
 
     pub fn rb(&self, address: u16) -> u8 {
+        println!("{:#}", address);
         0
         // TODO: Implement.
     }

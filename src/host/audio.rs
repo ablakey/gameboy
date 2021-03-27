@@ -31,7 +31,5 @@ impl Audio {
         if self.player.size() > 20_000 {
             self.player.clear();
         }
-
-        println!("{}", self.player.size());
     }
 }
