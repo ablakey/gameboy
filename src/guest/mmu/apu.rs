@@ -144,7 +144,7 @@ impl ApuRegisters {
     }
 
     pub fn rb(&self, address: u16) -> u8 {
-        println!("{:#}", address);
+        // println!("{:#}", address);
         0
         // TODO: Implement.
     }

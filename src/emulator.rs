@@ -40,7 +40,7 @@ impl Emulator {
         // SDL-based host: graphics, sound, audio.
         let sdl_context = sdl2::init()?;
         let input = Input::new(&sdl_context)?;
-        let screen = Screen::new(&sdl_context, 4)?;
+        let screen = Screen::new(&sdl_context, 8)?;
         let audio = Audio::new(&sdl_context)?;
 
         Ok(Self {

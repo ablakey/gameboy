@@ -80,15 +80,15 @@ impl APU {
             // All other ticks,  pass None()
             // This means the sequencer state machine needs to be advanced inside this loop.
 
-            let square2_sample = self.square2.tick(mmu, Some(sequencer_step));
+            // let square2_sample = self.square2.tick(mmu, Some(sequencer_step));
 
             // let sample = (wave_sample + square1_sample + square2_sample) / 3.0;
 
             // TODO: combine samples
             // TODO: append samples to the output.
 
-            self.output_buffer
-                .push_back([square2_sample, square2_sample]);
+            // self.output_buffer
+            //     .push_back([square2_sample, square2_sample]);
         }
 
         // // If 1 audio sample worth of cycles has passed, let's build a sample.
